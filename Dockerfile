@@ -19,7 +19,10 @@ ENV BACKEND_PORT=80
 # DNS resolver: 127.0.0.11 for Docker, kube-dns IP for Kubernetes.
 ENV DNS_RESOLVER=127.0.0.11
 
+# Service DNS suffix: empty for Docker Compose/Swarm, .namespace.svc.cluster.local for K8s.
+ENV SERVICE_SUFFIX=
+
 EXPOSE 80
 
-# envsubst replaces $BACKEND_PORT and $DNS_RESOLVER, leaving nginx variables ($uri etc.) intact
-CMD ["/bin/sh", "-c", "envsubst '${BACKEND_PORT} ${DNS_RESOLVER}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# envsubst replaces $BACKEND_PORT, $DNS_RESOLVER, and $SERVICE_SUFFIX
+CMD ["/bin/sh", "-c", "envsubst '${BACKEND_PORT} ${DNS_RESOLVER} ${SERVICE_SUFFIX}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
