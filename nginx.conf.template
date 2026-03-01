@@ -1,0 +1,103 @@
+server {
+    listen       80;
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    # Resolve service names at runtime (not startup) via Docker's embedded DNS.
+    # This prevents nginx from crashing if a backend service isn't up yet.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # -- SPA catch-all --
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # -- API reverse proxies --
+    # Matches the Vite dev-proxy rewrites in vite.config.ts
+    # Using variables forces nginx to resolve at request-time, not startup.
+
+    location /api/identity/ {
+        set $upstream_identity identity-service;
+        proxy_pass http://$upstream_identity:${BACKEND_PORT}/api/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/accommodations/ {
+        set $upstream_accommodation accommodation-service;
+        proxy_pass http://$upstream_accommodation:${BACKEND_PORT}/api/accommodation/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/availability/ {
+        set $upstream_availability availability-service;
+        proxy_pass http://$upstream_availability:${BACKEND_PORT}/api/availability/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/reservations/ {
+        set $upstream_reservation reservation-service;
+        proxy_pass http://$upstream_reservation:${BACKEND_PORT}/api/reservations/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ratings/ {
+        set $upstream_rating rating-service;
+        proxy_pass http://$upstream_rating:${BACKEND_PORT}/api/ratings/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/notifications/ {
+        set $upstream_notification notification-service;
+        proxy_pass http://$upstream_notification:${BACKEND_PORT}/api/notifications/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/search/ {
+        set $upstream_search search-service;
+        proxy_pass http://$upstream_search:${BACKEND_PORT}/api/search/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/cdn/ {
+        set $upstream_cdn cdn-service;
+        proxy_pass http://$upstream_cdn:${BACKEND_PORT}/api/assets/;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # -- Static asset caching --
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # -- Gzip --
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+    gzip_min_length 256;
+}
