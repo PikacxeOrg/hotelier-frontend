@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3002,
     proxy: {
       '/api/identity': {
         target: 'http://localhost:5003',
