@@ -5,6 +5,7 @@ import {
     HomePage,
     LoginPage,
     NotFoundPage,
+    NotificationsPage,
     ProfilePage,
     RegisterPage,
 } from "@/pages";
@@ -27,7 +28,14 @@ const router = createBrowserRouter([
                     </ProtectedRoute>
                 ),
             },
-
+            {
+                path: "notifications",
+                element: (
+                    <ProtectedRoute>
+                        <NotificationsPage />
+                    </ProtectedRoute>
+                ),
+            },
             // -- 404 -----------------------------------
             { path: "*", element: <NotFoundPage /> },
         ],
