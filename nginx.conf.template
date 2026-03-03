@@ -5,85 +5,102 @@ server {
     root   /usr/share/nginx/html;
     index  index.html;
 
-    # Resolve service names at runtime (not startup).
-    # Docker uses 127.0.0.11; Kubernetes uses kube-dns (set via $DNS_RESOLVER env var).
-    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
-
     # -- SPA catch-all --
     location / {
         try_files $uri $uri/ /index.html;
     }
 
     # -- API reverse proxies --
-    # Matches the Vite dev-proxy rewrites in vite.config.ts
-    # Using variables forces nginx to resolve at request-time, not startup.
+    # When proxy_pass includes a URI suffix, nginx automatically replaces the
+    # matched location prefix with that suffix — no rewrite directives needed.
+    # e.g. /api/identity/auth/login  →  http://identity-service:8080/api/auth/login
+    #      /api/accommodations/1     →  http://accommodation-service:8080/api/accommodation/1
+    #
+    # In Kubernetes these blocks are never reached: the nginx Ingress routes
+    # all /api/ traffic directly to backend services before it hits this pod.
 
-    location /api/identity/ {
-        set $upstream_identity identity-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_identity:${BACKEND_PORT}/api/;
+    # -- CORS helper --
+    set $cors_origin $http_origin;
+
+    # Path-remapping proxies: frontend prefix differs from backend prefix.
+    # rewrite + proxy_pass without a URI suffix → rewrite applies to upstream.
+    # e.g. /api/identity/auth/login  →  http://identity-service:8080/api/auth/login
+    #      /api/accommodations/1     →  http://accommodation-service:8080/api/accommodation/1
+    #      /api/cdn/foo.jpg          →  http://cdn-service:8080/api/assets/foo.jpg
+
+    location /api/identity {
+        include /etc/nginx/cors.conf;
+        rewrite ^/api/identity/?(.*) /api/$1 break;
+        proxy_pass http://identity-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/accommodations/ {
-        set $upstream_accommodation accommodation-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_accommodation:${BACKEND_PORT}/api/accommodation/;
+    location /api/accommodations {
+        include /etc/nginx/cors.conf;
+        rewrite ^/api/accommodations/?(.*) /api/accommodation/$1 break;
+        proxy_pass http://accommodation-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/availability/ {
-        set $upstream_availability availability-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_availability:${BACKEND_PORT}/api/availability/;
+    location /api/cdn {
+        include /etc/nginx/cors.conf;
+        rewrite ^/api/cdn/?(.*) /api/assets/$1 break;
+        proxy_pass http://cdn-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/reservations/ {
-        set $upstream_reservation reservation-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_reservation:${BACKEND_PORT}/api/reservations/;
+    # Pass-through proxies: frontend prefix = backend prefix.
+    # No trailing slash on location → matches /api/X and /api/X/...
+    # No URI suffix on proxy_pass  → full URI forwarded as-is.
+
+    location /api/availability {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://availability-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/ratings/ {
-        set $upstream_rating rating-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_rating:${BACKEND_PORT}/api/ratings/;
+    location /api/reservations {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://reservation-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/notifications/ {
-        set $upstream_notification notification-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_notification:${BACKEND_PORT}/api/notifications/;
+    location /api/ratings {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://rating-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/search/ {
-        set $upstream_search search-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_search:${BACKEND_PORT}/api/search/;
+    location /api/notifications {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://notification-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/cdn/ {
-        set $upstream_cdn cdn-service${SERVICE_SUFFIX};
-        proxy_pass http://$upstream_cdn:${BACKEND_PORT}/api/assets/;
+    location /api/search {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://search-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
