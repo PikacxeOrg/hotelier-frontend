@@ -2,13 +2,8 @@ import { useRef, useState } from "react";
 
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
-import {
-    Alert,
-    Box,
-    CircularProgress,
-    IconButton,
-    Typography,
-} from "@mui/material";
+import { Box, CircularProgress, IconButton, Typography } from "@mui/material";
+import { useSnackbar } from "notistack";
 
 import { cdnApi } from "@/api";
 
@@ -24,15 +19,14 @@ export default function ImageUpload({
     onPicturesChange,
 }: Props) {
     const inputRef = useRef<HTMLInputElement>(null);
+    const { enqueueSnackbar } = useSnackbar();
     const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState("");
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files?.length) return;
 
         setUploading(true);
-        setError("");
 
         try {
             const newUrls: string[] = [];
@@ -42,7 +36,9 @@ export default function ImageUpload({
             }
             onPicturesChange([...pictures, ...newUrls]);
         } catch {
-            setError("Failed to upload one or more images.");
+            enqueueSnackbar("Failed to upload one or more images.", {
+                variant: "error",
+            });
         } finally {
             setUploading(false);
             if (inputRef.current) inputRef.current.value = "";
@@ -58,12 +54,6 @@ export default function ImageUpload({
             <Typography variant="subtitle2" gutterBottom>
                 Photos
             </Typography>
-
-            {error && (
-                <Alert severity="error" sx={{ mb: 1 }}>
-                    {error}
-                </Alert>
-            )}
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
                 {pictures.map((pic, i) => (

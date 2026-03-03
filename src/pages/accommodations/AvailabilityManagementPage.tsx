@@ -5,7 +5,6 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import {
-    Alert,
     Box,
     Button,
     Card,
@@ -23,6 +22,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 
 import { accommodationApi, availabilityApi } from "@/api";
 import { LoadingScreen } from "@/components";
@@ -45,11 +45,11 @@ export default function AvailabilityManagementPage() {
         useState<AccommodationResponse | null>(null);
     const [windows, setWindows] = useState<AvailabilityResponse[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState(emptyForm);
     const [saving, setSaving] = useState(false);
+    const { enqueueSnackbar } = useSnackbar();
 
     const load = async () => {
         if (!id) return;
@@ -61,7 +61,7 @@ export default function AvailabilityManagementPage() {
             setAccommodation(accRes.data);
             setWindows(avRes.data);
         } catch {
-            setError("Failed to load data.");
+            enqueueSnackbar("Failed to load data.", { variant: "error" });
         } finally {
             setLoading(false);
         }
@@ -135,13 +135,20 @@ export default function AvailabilityManagementPage() {
                     priceModifiers: modifiers,
                 });
             }
+            enqueueSnackbar(
+                editingId
+                    ? "Availability period updated."
+                    : "Availability period created.",
+                { variant: "success" },
+            );
             setDialogOpen(false);
             await load();
         } catch {
-            setError(
+            enqueueSnackbar(
                 editingId
                     ? "Failed to update — there may be existing reservations in this period."
                     : "Failed to create availability period.",
+                { variant: "error" },
             );
         } finally {
             setSaving(false);
@@ -153,9 +160,13 @@ export default function AvailabilityManagementPage() {
         try {
             await availabilityApi.delete(windowId);
             setWindows((prev) => prev.filter((w) => w.id !== windowId));
+            enqueueSnackbar("Availability period deleted.", {
+                variant: "success",
+            });
         } catch {
-            setError(
+            enqueueSnackbar(
                 "Cannot delete — there may be existing reservations in this period.",
+                { variant: "error" },
             );
         }
     };
@@ -184,16 +195,6 @@ export default function AvailabilityManagementPage() {
                     Add Period
                 </Button>
             </Box>
-
-            {error && (
-                <Alert
-                    severity="error"
-                    sx={{ mb: 2 }}
-                    onClose={() => setError("")}
-                >
-                    {error}
-                </Alert>
-            )}
 
             {windows.length === 0 ? (
                 <Typography color="text.secondary">

@@ -12,6 +12,8 @@ import {
     Typography,
 } from "@mui/material";
 
+import { useSnackbar } from "notistack";
+
 import { accommodationApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
@@ -20,6 +22,7 @@ import type { AccommodationResponse } from "@/types";
 export default function MyAccommodationsPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { enqueueSnackbar } = useSnackbar();
     const [accommodations, setAccommodations] = useState<
         AccommodationResponse[]
     >([]);
@@ -30,6 +33,11 @@ export default function MyAccommodationsPage() {
         accommodationApi
             .getMine()
             .then(({ data }) => setAccommodations(data))
+            .catch(() =>
+                enqueueSnackbar("Failed to load accommodations.", {
+                    variant: "error",
+                }),
+            )
             .finally(() => setLoading(false));
     }, [user]);
 

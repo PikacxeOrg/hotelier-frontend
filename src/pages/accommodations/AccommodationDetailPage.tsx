@@ -18,6 +18,7 @@ import {
 import { accommodationApi, ratingApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
+import { useSnackbar } from "notistack";
 import type {
     AccommodationResponse,
     RatingResponse,
@@ -29,6 +30,7 @@ export default function AccommodationDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { enqueueSnackbar } = useSnackbar();
     const [accommodation, setAccommodation] =
         useState<AccommodationResponse | null>(null);
     const [ratings, setRatings] = useState<RatingResponse[]>([]);
@@ -98,6 +100,9 @@ export default function AccommodationDetailPage() {
             setReviewScore(null);
             setReviewComment("");
             await loadRatings();
+            enqueueSnackbar("Review submitted. Thank you!", {
+                variant: "success",
+            });
         } catch (err: any) {
             const msg =
                 err?.response?.data?.message ??

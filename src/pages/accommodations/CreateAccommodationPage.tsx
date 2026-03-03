@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-    Alert,
     Box,
     Button,
     Card,
@@ -12,12 +11,13 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 
 import { accommodationApi } from "@/api";
 
 export default function CreateAccommodationPage() {
     const navigate = useNavigate();
-    const [error, setError] = useState("");
+    const { enqueueSnackbar } = useSnackbar();
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({
         name: "",
@@ -46,7 +46,9 @@ export default function CreateAccommodationPage() {
             });
             navigate(`/accommodations/${data.id}`);
         } catch {
-            setError("Failed to create accommodation.");
+            enqueueSnackbar("Failed to create accommodation.", {
+                variant: "error",
+            });
         } finally {
             setLoading(false);
         }
@@ -57,12 +59,6 @@ export default function CreateAccommodationPage() {
             <Typography variant="h4" gutterBottom>
                 New Accommodation
             </Typography>
-
-            {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {error}
-                </Alert>
-            )}
 
             <Card>
                 <CardContent>

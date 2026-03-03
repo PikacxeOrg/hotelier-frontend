@@ -10,6 +10,7 @@ import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
 import type { ReservationResponse } from "@/types";
 import { ReservationStatus, UserType } from "@/types";
+import { useSnackbar } from "notistack";
 
 const statusColors: Record<
     ReservationStatus,
@@ -30,6 +31,7 @@ const statusLabels: Record<ReservationStatus, string> = {
 
 export default function ReservationsPage() {
     const { user } = useAuth();
+    const { enqueueSnackbar } = useSnackbar();
     const [tab, setTab] = useState(0);
     const [guestReservations, setGuestReservations] = useState<
         ReservationResponse[]
@@ -58,7 +60,9 @@ export default function ReservationsPage() {
                 if (hostRes.status === "fulfilled")
                     setHostReservations(hostRes.value.data);
             } catch {
-                /* TODO */
+                enqueueSnackbar("Failed to load reservations.", {
+                    variant: "error",
+                });
             } finally {
                 setLoading(false);
             }
@@ -67,21 +71,39 @@ export default function ReservationsPage() {
     }, [isHost]);
 
     const handleApprove = async (id: string) => {
-        await reservationApi.approve(id);
-        setHostReservations((prev) =>
-            prev.map((r) =>
-                r.id === id ? { ...r, status: ReservationStatus.Approved } : r,
-            ),
-        );
+        try {
+            await reservationApi.approve(id);
+            setHostReservations((prev) =>
+                prev.map((r) =>
+                    r.id === id
+                        ? { ...r, status: ReservationStatus.Approved }
+                        : r,
+                ),
+            );
+            enqueueSnackbar("Reservation approved.", { variant: "success" });
+        } catch {
+            enqueueSnackbar("Failed to approve reservation.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleReject = async (id: string) => {
-        await reservationApi.reject(id);
-        setHostReservations((prev) =>
-            prev.map((r) =>
-                r.id === id ? { ...r, status: ReservationStatus.Denied } : r,
-            ),
-        );
+        try {
+            await reservationApi.reject(id);
+            setHostReservations((prev) =>
+                prev.map((r) =>
+                    r.id === id
+                        ? { ...r, status: ReservationStatus.Denied }
+                        : r,
+                ),
+            );
+            enqueueSnackbar("Reservation rejected.", { variant: "success" });
+        } catch {
+            enqueueSnackbar("Failed to reject reservation.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleCancel = async (id: string) => {
@@ -94,8 +116,12 @@ export default function ReservationsPage() {
                         : r,
                 ),
             );
+            enqueueSnackbar("Reservation cancelled.", { variant: "success" });
         } catch {
-            /* cancellation may fail if < 1 day before start */
+            enqueueSnackbar(
+                "Cannot cancel — the check-in date may be too close.",
+                { variant: "error" },
+            );
         }
     };
 
@@ -103,8 +129,11 @@ export default function ReservationsPage() {
         try {
             await reservationApi.delete(id);
             setGuestReservations((prev) => prev.filter((r) => r.id !== id));
+            enqueueSnackbar("Reservation deleted.", { variant: "success" });
         } catch {
-            /* TODO */
+            enqueueSnackbar("Failed to delete reservation.", {
+                variant: "error",
+            });
         }
     };
 

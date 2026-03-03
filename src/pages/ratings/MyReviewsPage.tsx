@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import {
-    Alert,
     Box,
     Button,
     Card,
@@ -18,6 +17,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 
 import { ratingApi } from "@/api";
 import { LoadingScreen } from "@/components";
@@ -27,7 +27,7 @@ import { RatingTargetType } from "@/types";
 export default function MyReviewsPage() {
     const [reviews, setReviews] = useState<RatingResponse[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const { enqueueSnackbar } = useSnackbar();
 
     // Edit dialog state
     const [editingReview, setEditingReview] = useState<RatingResponse | null>(
@@ -42,7 +42,7 @@ export default function MyReviewsPage() {
             const { data } = await ratingApi.getMine();
             setReviews(data);
         } catch {
-            setError("Failed to load reviews.");
+            enqueueSnackbar("Failed to load reviews.", { variant: "error" });
         } finally {
             setLoading(false);
         }
@@ -57,8 +57,9 @@ export default function MyReviewsPage() {
         try {
             await ratingApi.delete(id);
             setReviews((prev) => prev.filter((r) => r.id !== id));
+            enqueueSnackbar("Review deleted.", { variant: "success" });
         } catch {
-            setError("Failed to delete review.");
+            enqueueSnackbar("Failed to delete review.", { variant: "error" });
         }
     };
 
@@ -80,8 +81,9 @@ export default function MyReviewsPage() {
                 prev.map((r) => (r.id === data.id ? data : r)),
             );
             setEditingReview(null);
+            enqueueSnackbar("Review updated.", { variant: "success" });
         } catch {
-            setError("Failed to update review.");
+            enqueueSnackbar("Failed to update review.", { variant: "error" });
         } finally {
             setSaving(false);
         }
@@ -94,16 +96,6 @@ export default function MyReviewsPage() {
             <Typography variant="h4" gutterBottom>
                 My Reviews
             </Typography>
-
-            {error && (
-                <Alert
-                    severity="error"
-                    sx={{ mb: 2 }}
-                    onClose={() => setError("")}
-                >
-                    {error}
-                </Alert>
-            )}
 
             {reviews.length === 0 ? (
                 <Typography color="text.secondary">

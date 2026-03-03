@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-    Alert,
     Box,
     Button,
     Card,
@@ -12,6 +11,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 
 import { accommodationApi } from "@/api";
 import ImageUpload from "@/components/ImageUpload";
@@ -23,11 +23,11 @@ export default function EditAccommodationPage() {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { enqueueSnackbar } = useSnackbar();
     const [accommodation, setAccommodation] =
         useState<AccommodationResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
     const [form, setForm] = useState({
         name: "",
         location: "",
@@ -54,7 +54,11 @@ export default function EditAccommodationPage() {
                 });
                 setPictures(data.pictures);
             })
-            .catch(() => setError("Failed to load accommodation."))
+            .catch(() =>
+                enqueueSnackbar("Failed to load accommodation.", {
+                    variant: "error",
+                }),
+            )
             .finally(() => setLoading(false));
     }, [id]);
 
@@ -85,9 +89,12 @@ export default function EditAccommodationPage() {
                 maxGuests: form.maxGuests,
                 autoApproval: form.autoApproval,
             });
+            enqueueSnackbar("Accommodation saved.", { variant: "success" });
             navigate(`/accommodations/${accommodation.id}`);
         } catch {
-            setError("Failed to update accommodation.");
+            enqueueSnackbar("Failed to update accommodation.", {
+                variant: "error",
+            });
         } finally {
             setSaving(false);
         }
@@ -98,9 +105,12 @@ export default function EditAccommodationPage() {
             return;
         try {
             await accommodationApi.delete(accommodation.id);
+            enqueueSnackbar("Accommodation deleted.", { variant: "success" });
             navigate("/my-accommodations");
         } catch {
-            setError("Failed to delete accommodation.");
+            enqueueSnackbar("Failed to delete accommodation.", {
+                variant: "error",
+            });
         }
     };
 
@@ -109,12 +119,6 @@ export default function EditAccommodationPage() {
             <Typography variant="h4" gutterBottom>
                 Edit Accommodation
             </Typography>
-
-            {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {error}
-                </Alert>
-            )}
 
             <Card sx={{ mb: 3 }}>
                 <CardContent>

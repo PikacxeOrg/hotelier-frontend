@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import SearchIcon from "@mui/icons-material/Search";
@@ -15,11 +15,14 @@ import {
     Typography,
 } from "@mui/material";
 
+import { useSnackbar } from "notistack";
+
 import { searchApi } from "@/api";
 import type { SearchRequest, SearchResponse } from "@/types";
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const { enqueueSnackbar } = useSnackbar();
     const [results, setResults] = useState<SearchResponse[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -39,11 +42,17 @@ export default function HomePage() {
             setResults(data.items);
             setTotalCount(data.totalCount);
         } catch {
-            /* TODO: error snackbar */
+            enqueueSnackbar("Failed to load accommodations.", {
+                variant: "error",
+            });
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        handleSearch();
+    }, []);
 
     return (
         <Box>
