@@ -113,7 +113,6 @@ export default function AvailabilityManagementPage() {
     };
 
     const handleSave = async () => {
-        setError("");
         setSaving(true);
         try {
             const modifiers = parseModifiers(form.modifiers);

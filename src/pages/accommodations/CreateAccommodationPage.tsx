@@ -30,7 +30,6 @@ export default function CreateAccommodationPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError("");
         setLoading(true);
         try {
             const { data } = await accommodationApi.create({

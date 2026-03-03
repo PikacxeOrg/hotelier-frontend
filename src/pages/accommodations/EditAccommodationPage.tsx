@@ -75,7 +75,6 @@ export default function EditAccommodationPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError("");
         setSaving(true);
         try {
             await accommodationApi.update(accommodation.id, {
