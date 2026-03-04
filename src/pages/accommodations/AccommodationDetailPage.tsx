@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
+import CloseIcon from "@mui/icons-material/Close";
 import {
     Alert,
     Box,
@@ -8,14 +11,17 @@ import {
     Card,
     CardContent,
     Chip,
+    Dialog,
+    DialogContent,
     Divider,
     Grid,
+    IconButton,
     Rating,
     TextField,
     Typography,
 } from "@mui/material";
 
-import { accommodationApi, ratingApi } from "@/api";
+import { accommodationApi, ratingApi, usersApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
 import { useSnackbar } from "notistack";
@@ -36,12 +42,33 @@ export default function AccommodationDetailPage() {
     const [ratings, setRatings] = useState<RatingResponse[]>([]);
     const [summary, setSummary] = useState<RatingSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [guestNames, setGuestNames] = useState<Record<string, string>>({});
 
     // Review form state
     const [reviewScore, setReviewScore] = useState<number | null>(null);
     const [reviewComment, setReviewComment] = useState("");
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [reviewError, setReviewError] = useState("");
+
+    // Gallery state
+    const [activePhoto, setActivePhoto] = useState(0);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
+
+    const openLightbox = (index: number) => {
+        setLightboxIndex(index);
+        setLightboxOpen(true);
+    };
+    const lightboxPrev = () =>
+        setLightboxIndex(
+            (i) =>
+                (i - 1 + (accommodation?.pictures.length ?? 1)) %
+                (accommodation?.pictures.length ?? 1),
+        );
+    const lightboxNext = () =>
+        setLightboxIndex(
+            (i) => (i + 1) % (accommodation?.pictures.length ?? 1),
+        );
 
     const loadRatings = async () => {
         if (!id) return;
@@ -54,6 +81,17 @@ export default function AccommodationDetailPage() {
             ]);
             setRatings(ratRes.data);
             setSummary(sumRes.data);
+            // Fetch reviewer names
+            const ids = [...new Set(ratRes.data.map((r) => r.guestId))];
+            const entries = await Promise.all(
+                ids.map((gid) =>
+                    usersApi
+                        .getById(gid)
+                        .then(({ data }) => [gid, data.username] as const)
+                        .catch(() => [gid, gid.slice(0, 8)] as const),
+                ),
+            );
+            setGuestNames(Object.fromEntries(entries));
         } catch {
             /* ignore */
         }
@@ -73,6 +111,18 @@ export default function AccommodationDetailPage() {
                 setAccommodation(accRes.data);
                 setRatings(ratRes.data);
                 setSummary(sumRes.data);
+                // Fetch reviewer names
+                const ids = [...new Set(ratRes.data.map((r: RatingResponse) => r.guestId))];
+                Promise.all(
+                    ids.map((gid) =>
+                        usersApi
+                            .getById(gid)
+                            .then(({ data }) => [gid, data.username] as const)
+                            .catch(() => [gid, (gid as string).slice(0, 8)] as const),
+                    ),
+                ).then((entries) =>
+                    setGuestNames(Object.fromEntries(entries)),
+                );
             })
             .finally(() => setLoading(false));
     }, [id]);
@@ -127,24 +177,174 @@ export default function AccommodationDetailPage() {
                 {accommodation.location}
             </Typography>
 
-            {/* Pictures placeholder */}
-            {accommodation.pictures.length > 0 && (
-                <Box sx={{ display: "flex", gap: 1, overflowX: "auto", mb: 3 }}>
-                    {accommodation.pictures.map((pic, i) => (
+            {/* Gallery */}
+            {accommodation.pictures.length > 0 ? (
+                <Box sx={{ mb: 3 }}>
+                    {/* Main image */}
+                    <Box
+                        component="img"
+                        src={accommodation.pictures[activePhoto]}
+                        alt={`${accommodation.name} ${activePhoto + 1}`}
+                        onClick={() => openLightbox(activePhoto)}
+                        sx={{
+                            width: "100%",
+                            maxHeight: 480,
+                            objectFit: "cover",
+                            borderRadius: 2,
+                            cursor: "zoom-in",
+                            display: "block",
+                        }}
+                    />
+
+                    {/* Thumbnail strip */}
+                    {accommodation.pictures.length > 1 && (
                         <Box
-                            key={i}
-                            component="img"
-                            src={pic}
-                            alt={`${accommodation.name} ${i + 1}`}
                             sx={{
-                                height: 200,
-                                borderRadius: 2,
-                                objectFit: "cover",
+                                display: "flex",
+                                gap: 1,
+                                mt: 1,
+                                overflowX: "auto",
+                                pb: 0.5,
                             }}
-                        />
-                    ))}
+                        >
+                            {accommodation.pictures.map((pic, i) => (
+                                <Box
+                                    key={i}
+                                    component="img"
+                                    src={pic}
+                                    alt={`${accommodation.name} thumbnail ${i + 1}`}
+                                    onClick={() => setActivePhoto(i)}
+                                    sx={{
+                                        height: 72,
+                                        width: 96,
+                                        objectFit: "cover",
+                                        borderRadius: 1,
+                                        cursor: "pointer",
+                                        flexShrink: 0,
+                                        border: 2,
+                                        borderColor:
+                                            i === activePhoto
+                                                ? "primary.main"
+                                                : "transparent",
+                                        opacity: i === activePhoto ? 1 : 0.65,
+                                        transition:
+                                            "opacity 0.2s, border-color 0.2s",
+                                        "&:hover": { opacity: 1 },
+                                    }}
+                                />
+                            ))}
+                        </Box>
+                    )}
+                </Box>
+            ) : (
+                <Box
+                    sx={{
+                        mb: 3,
+                        height: 240,
+                        bgcolor: "action.hover",
+                        borderRadius: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <Typography color="text.secondary">No photos</Typography>
                 </Box>
             )}
+
+            {/* Lightbox */}
+            <Dialog
+                open={lightboxOpen}
+                onClose={() => setLightboxOpen(false)}
+                maxWidth={false}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            bgcolor: "black",
+                            m: 1,
+                            maxWidth: "95vw",
+                            maxHeight: "95vh",
+                        },
+                    },
+                }}
+            >
+                <DialogContent
+                    sx={{
+                        p: 0,
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <IconButton
+                        onClick={() => setLightboxOpen(false)}
+                        sx={{
+                            position: "absolute",
+                            top: 8,
+                            right: 8,
+                            color: "white",
+                            zIndex: 1,
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+
+                    {accommodation.pictures.length > 1 && (
+                        <IconButton
+                            onClick={lightboxPrev}
+                            sx={{
+                                position: "absolute",
+                                left: 8,
+                                color: "white",
+                                bgcolor: "rgba(0,0,0,0.4)",
+                            }}
+                        >
+                            <ArrowBackIosNewIcon />
+                        </IconButton>
+                    )}
+
+                    <Box
+                        component="img"
+                        src={accommodation.pictures[lightboxIndex]}
+                        alt={`${accommodation.name} ${lightboxIndex + 1}`}
+                        sx={{
+                            maxWidth: "90vw",
+                            maxHeight: "90vh",
+                            objectFit: "contain",
+                            display: "block",
+                        }}
+                    />
+
+                    {accommodation.pictures.length > 1 && (
+                        <IconButton
+                            onClick={lightboxNext}
+                            sx={{
+                                position: "absolute",
+                                right: 8,
+                                color: "white",
+                                bgcolor: "rgba(0,0,0,0.4)",
+                            }}
+                        >
+                            <ArrowForwardIosIcon />
+                        </IconButton>
+                    )}
+
+                    {accommodation.pictures.length > 1 && (
+                        <Typography
+                            sx={{
+                                position: "absolute",
+                                bottom: 12,
+                                color: "white",
+                                fontSize: 13,
+                            }}
+                        >
+                            {lightboxIndex + 1} /{" "}
+                            {accommodation.pictures.length}
+                        </Typography>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 8 }}>
@@ -232,7 +432,9 @@ export default function AccommodationDetailPage() {
                                                 variant="caption"
                                                 color="text.secondary"
                                             >
-                                                by {r.guestId.slice(0, 8)}
+                                                by{" "}
+                                                {guestNames[r.guestId] ??
+                                                    r.guestId.slice(0, 8)}
                                             </Typography>
                                         </Box>
                                         {r.comment && (
@@ -317,7 +519,40 @@ export default function AccommodationDetailPage() {
                                 gap: 2,
                             }}
                         >
-                            {!isOwner && user && (
+                            {!user && (
+                                <>
+                                    <Typography
+                                        variant="subtitle1"
+                                        fontWeight={600}
+                                    >
+                                        Want to stay here?
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                    >
+                                        Sign in or create an account to reserve
+                                        this accommodation and manage your
+                                        bookings.
+                                    </Typography>
+                                    <Button
+                                        variant="contained"
+                                        fullWidth
+                                        onClick={() => navigate("/login")}
+                                    >
+                                        Sign in to Reserve
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        onClick={() => navigate("/register")}
+                                    >
+                                        Create Account
+                                    </Button>
+                                </>
+                            )}
+
+                            {user && !isOwner && (
                                 <Button
                                     variant="contained"
                                     fullWidth
@@ -331,7 +566,7 @@ export default function AccommodationDetailPage() {
                                 </Button>
                             )}
 
-                            {isOwner && (
+                            {user && isOwner && (
                                 <>
                                     <Button
                                         variant="outlined"
