@@ -1,27 +1,56 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import {
     Alert,
     Box,
     Button,
     Card,
     CardContent,
+    Chip,
+    Divider,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableRow,
     TextField,
     Typography,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 
-import { accommodationApi, reservationApi } from "@/api";
+import { accommodationApi, availabilityApi, reservationApi } from "@/api";
 import { LoadingScreen } from "@/components";
-import type { AccommodationResponse } from "@/types";
+import { useAuth } from "@/contexts";
+import type { AccommodationResponse, AvailabilityResponse } from "@/types";
+import { PriceType, UserType } from "@/types";
 
 export default function CreateReservationPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { enqueueSnackbar } = useSnackbar();
+    const { user } = useAuth();
     const accommodationId = searchParams.get("accommodationId") ?? "";
+
+    // Hosts are not allowed to make reservations
+    if (user?.userType === UserType.Host) {
+        return (
+            <Box sx={{ maxWidth: 680, mx: "auto" }}>
+                <Alert severity="error">
+                    Hosts cannot make reservations. Please use a guest account
+                    to book accommodations.
+                </Alert>
+                <Button sx={{ mt: 2 }} onClick={() => navigate("/")}>
+                    Back to Home
+                </Button>
+            </Box>
+        );
+    }
 
     const [accommodation, setAccommodation] =
         useState<AccommodationResponse | null>(null);
+    const [windows, setWindows] = useState<AvailabilityResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -36,20 +65,23 @@ export default function CreateReservationPage() {
             setLoading(false);
             return;
         }
-        accommodationApi
-            .getById(accommodationId)
-            .then(({ data }) => {
-                setAccommodation(data);
-                setForm((f) => ({ ...f, numOfGuests: data.minGuests }));
+        Promise.all([
+            accommodationApi.getById(accommodationId),
+            availabilityApi.getByAccommodation(accommodationId, true),
+        ])
+            .then(([accRes, avRes]) => {
+                setAccommodation(accRes.data);
+                setWindows(avRes.data);
+                setForm((f) => ({ ...f, numOfGuests: accRes.data.minGuests }));
             })
-            .catch(() => setError("Accommodation not found."))
+            .catch(() => setError("Failed to load accommodation."))
             .finally(() => setLoading(false));
     }, [accommodationId]);
 
     if (loading) return <LoadingScreen />;
     if (!accommodation) {
         return (
-            <Box sx={{ maxWidth: 600, mx: "auto" }}>
+            <Box sx={{ maxWidth: 680, mx: "auto" }}>
                 <Alert severity="error">
                     No accommodation specified. Please select an accommodation
                     first.
@@ -57,6 +89,14 @@ export default function CreateReservationPage() {
             </Box>
         );
     }
+
+    const handleSelectWindow = (w: AvailabilityResponse) => {
+        setForm((f) => ({
+            ...f,
+            fromDate: w.fromDate.split("T")[0],
+            toDate: w.toDate.split("T")[0],
+        }));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,6 +108,9 @@ export default function CreateReservationPage() {
                 fromDate: form.fromDate,
                 toDate: form.toDate,
                 numOfGuests: form.numOfGuests,
+            });
+            enqueueSnackbar("Reservation request submitted!", {
+                variant: "success",
             });
             navigate("/my-reservations");
         } catch (err: any) {
@@ -83,8 +126,27 @@ export default function CreateReservationPage() {
         }
     };
 
+    const nights =
+        form.fromDate && form.toDate
+            ? Math.max(
+                  0,
+                  (new Date(form.toDate).getTime() -
+                      new Date(form.fromDate).getTime()) /
+                      86_400_000,
+              )
+            : 0;
+
+    const matchingWindow =
+        form.fromDate && form.toDate
+            ? windows.find(
+                  (w) =>
+                      w.fromDate.split("T")[0] <= form.fromDate &&
+                      w.toDate.split("T")[0] >= form.toDate,
+              )
+            : null;
+
     return (
-        <Box sx={{ maxWidth: 600, mx: "auto" }}>
+        <Box sx={{ maxWidth: 680, mx: "auto" }}>
             <Typography variant="h4" gutterBottom>
                 Book: {accommodation.name}
             </Typography>
@@ -93,6 +155,93 @@ export default function CreateReservationPage() {
                 {accommodation.maxGuests} guests
                 {accommodation.autoApproval ? " · Auto-approved" : ""}
             </Typography>
+
+            {/* Available windows */}
+            {windows.length > 0 && (
+                <Card sx={{ mb: 3 }}>
+                    <CardContent>
+                        <Box
+                            sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                                mb: 1.5,
+                            }}
+                        >
+                            <EventAvailableIcon color="success" />
+                            <Typography variant="h6">
+                                Available Periods
+                            </Typography>
+                        </Box>
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1.5 }}
+                        >
+                            Click a row to pre-fill the dates below.
+                        </Typography>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Check-in</TableCell>
+                                    <TableCell>Check-out</TableCell>
+                                    <TableCell>Price / night</TableCell>
+                                    <TableCell>Type</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {windows.map((w) => (
+                                    <TableRow
+                                        key={w.id}
+                                        hover
+                                        sx={{ cursor: "pointer" }}
+                                        onClick={() => handleSelectWindow(w)}
+                                        selected={
+                                            form.fromDate ===
+                                                w.fromDate.split("T")[0] &&
+                                            form.toDate ===
+                                                w.toDate.split("T")[0]
+                                        }
+                                    >
+                                        <TableCell>
+                                            {new Date(
+                                                w.fromDate,
+                                            ).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(
+                                                w.toDate,
+                                            ).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            €{w.price.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={
+                                                    w.priceType ===
+                                                    PriceType.PerGuest
+                                                        ? "Per guest"
+                                                        : "Per unit"
+                                                }
+                                                size="small"
+                                                variant="outlined"
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {windows.length === 0 && (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                    No availability periods are currently defined for this
+                    accommodation.
+                </Alert>
+            )}
 
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -157,6 +306,46 @@ export default function CreateReservationPage() {
                             }}
                             helperText={`Min: ${accommodation.minGuests}, Max: ${accommodation.maxGuests}`}
                         />
+
+                        {/* Price estimate */}
+                        {matchingWindow && nights > 0 && (
+                            <>
+                                <Divider />
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                    >
+                                        €{matchingWindow.price.toFixed(2)} ×{" "}
+                                        {nights} night{nights !== 1 ? "s" : ""}
+                                        {matchingWindow.priceType ===
+                                            PriceType.PerGuest &&
+                                            ` × ${form.numOfGuests} guests`}
+                                    </Typography>
+                                    <Typography
+                                        variant="subtitle1"
+                                        fontWeight={700}
+                                    >
+                                        €
+                                        {(
+                                            matchingWindow.price *
+                                            nights *
+                                            (matchingWindow.priceType ===
+                                            PriceType.PerGuest
+                                                ? form.numOfGuests
+                                                : 1)
+                                        ).toFixed(2)}
+                                    </Typography>
+                                </Box>
+                            </>
+                        )}
+
                         <Button
                             type="submit"
                             variant="contained"

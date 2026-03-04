@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { Box, Button, Chip, Tab, Tabs, Typography } from "@mui/material";
+import { Box, Button, Chip, Link, Typography } from "@mui/material";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { useSnackbar } from "notistack";
 
-import { reservationApi } from "@/api";
+import { accommodationApi, reservationApi, usersApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
 import type { ReservationResponse } from "@/types";
 import { ReservationStatus, UserType } from "@/types";
-import { useSnackbar } from "notistack";
 
 const statusColors: Record<
     ReservationStatus,
@@ -32,7 +33,7 @@ const statusLabels: Record<ReservationStatus, string> = {
 export default function ReservationsPage() {
     const { user } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
-    const [tab, setTab] = useState(0);
+    const navigate = useNavigate();
     const [guestReservations, setGuestReservations] = useState<
         ReservationResponse[]
     >([]);
@@ -40,25 +41,67 @@ export default function ReservationsPage() {
         ReservationResponse[]
     >([]);
     const [loading, setLoading] = useState(true);
+    // enrichment maps
+    const [accommodationNames, setAccommodationNames] = useState<
+        Record<string, string>
+    >({});
+    const [guestNames, setGuestNames] = useState<Record<string, string>>({});
 
     const isHost = user?.userType === UserType.Host;
 
     useEffect(() => {
         const load = async () => {
             try {
-                const [guestRes, hostRes] = await Promise.allSettled([
-                    reservationApi.getMyReservations(),
-                    isHost
-                        ? reservationApi.getHostReservations()
-                        : Promise.resolve({
-                              data: [] as ReservationResponse[],
-                          }),
-                ]);
+                if (isHost) {
+                    const { data } = await reservationApi.getHostReservations();
+                    setHostReservations(data);
 
-                if (guestRes.status === "fulfilled")
-                    setGuestReservations(guestRes.value.data);
-                if (hostRes.status === "fulfilled")
-                    setHostReservations(hostRes.value.data);
+                    // Enrich: unique accommodation IDs and guest user IDs
+                    const accIds = [
+                        ...new Set(data.map((r) => r.accommodationId)),
+                    ];
+                    const userIds = [...new Set(data.map((r) => r.userId))];
+
+                    const [accResults, userResults] = await Promise.all([
+                        Promise.allSettled(
+                            accIds.map((id) => accommodationApi.getById(id)),
+                        ),
+                        Promise.allSettled(
+                            userIds.map((id) => usersApi.getById(id)),
+                        ),
+                    ]);
+
+                    const accMap: Record<string, string> = {};
+                    accResults.forEach((res, i) => {
+                        if (res.status === "fulfilled")
+                            accMap[accIds[i]] = res.value.data.name;
+                    });
+                    setAccommodationNames(accMap);
+
+                    const userMap: Record<string, string> = {};
+                    userResults.forEach((res, i) => {
+                        if (res.status === "fulfilled")
+                            userMap[userIds[i]] = res.value.data.username;
+                    });
+                    setGuestNames(userMap);
+                } else {
+                    const { data } = await reservationApi.getMyReservations();
+                    setGuestReservations(data);
+
+                    // Enrich accommodation names for guest view too
+                    const accIds = [
+                        ...new Set(data.map((r) => r.accommodationId)),
+                    ];
+                    const accResults = await Promise.allSettled(
+                        accIds.map((id) => accommodationApi.getById(id)),
+                    );
+                    const accMap: Record<string, string> = {};
+                    accResults.forEach((res, i) => {
+                        if (res.status === "fulfilled")
+                            accMap[accIds[i]] = res.value.data.name;
+                    });
+                    setAccommodationNames(accMap);
+                }
             } catch {
                 enqueueSnackbar("Failed to load reservations.", {
                     variant: "error",
@@ -137,42 +180,62 @@ export default function ReservationsPage() {
         }
     };
 
-    const baseColumns: GridColDef[] = [
+    // Shared columns
+    const accommodationCol: GridColDef = {
+        field: "accommodationId",
+        headerName: "Accommodation",
+        flex: 1,
+        minWidth: 160,
+        renderCell: ({ value }) => (
+            <Link
+                component="button"
+                underline="hover"
+                onClick={() => navigate(`/accommodations/${value}`)}
+            >
+                {accommodationNames[value] ?? value.slice(0, 8) + "…"}
+            </Link>
+        ),
+    };
+
+    const dateColumns: GridColDef[] = [
         {
             field: "fromDate",
             headerName: "Check-in",
-            width: 120,
+            width: 110,
             valueFormatter: (value: string) =>
                 new Date(value).toLocaleDateString(),
         },
         {
             field: "toDate",
             headerName: "Check-out",
-            width: 120,
+            width: 110,
             valueFormatter: (value: string) =>
                 new Date(value).toLocaleDateString(),
         },
-        { field: "numOfGuests", headerName: "Guests", width: 80 },
-        {
-            field: "status",
-            headerName: "Status",
-            width: 130,
-            renderCell: ({ value }) => (
-                <Chip
-                    label={statusLabels[value as ReservationStatus]}
-                    color={statusColors[value as ReservationStatus]}
-                    size="small"
-                />
-            ),
-        },
+        { field: "numOfGuests", headerName: "Guests", width: 70 },
     ];
 
+    const statusCol: GridColDef = {
+        field: "status",
+        headerName: "Status",
+        width: 120,
+        renderCell: ({ value }) => (
+            <Chip
+                label={statusLabels[value as ReservationStatus]}
+                color={statusColors[value as ReservationStatus]}
+                size="small"
+            />
+        ),
+    };
+
     const guestColumns: GridColDef[] = [
-        ...baseColumns,
+        accommodationCol,
+        ...dateColumns,
+        statusCol,
         {
             field: "actions",
             headerName: "",
-            width: 160,
+            width: 120,
             sortable: false,
             renderCell: ({ row }) => {
                 if (row.status === ReservationStatus.Pending) {
@@ -203,7 +266,22 @@ export default function ReservationsPage() {
     ];
 
     const hostColumns: GridColDef[] = [
-        ...baseColumns,
+        accommodationCol,
+        ...dateColumns,
+        {
+            field: "userId",
+            headerName: "Guest",
+            width: 140,
+            renderCell: ({ value }) =>
+                guestNames[value] ? (
+                    <Typography variant="body2">{guestNames[value]}</Typography>
+                ) : (
+                    <Typography variant="body2" color="text.secondary">
+                        {value.slice(0, 8)}…
+                    </Typography>
+                ),
+        },
+        statusCol,
         {
             field: "actions",
             headerName: "",
@@ -238,43 +316,20 @@ export default function ReservationsPage() {
     return (
         <Box>
             <Typography variant="h4" gutterBottom>
-                Reservations
+                {isHost ? "Guest Requests" : "My Reservations"}
             </Typography>
 
-            {isHost && (
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-                    <Tab label="My Reservations" />
-                    <Tab label="Guest Requests" />
-                </Tabs>
-            )}
-
-            {tab === 0 && (
-                <DataGrid
-                    rows={guestReservations}
-                    columns={guestColumns}
-                    pageSizeOptions={[10, 25]}
-                    initialState={{
-                        pagination: { paginationModel: { pageSize: 10 } },
-                    }}
-                    disableRowSelectionOnClick
-                    autoHeight
-                    sx={{ bgcolor: "white" }}
-                />
-            )}
-
-            {tab === 1 && isHost && (
-                <DataGrid
-                    rows={hostReservations}
-                    columns={hostColumns}
-                    pageSizeOptions={[10, 25]}
-                    initialState={{
-                        pagination: { paginationModel: { pageSize: 10 } },
-                    }}
-                    disableRowSelectionOnClick
-                    autoHeight
-                    sx={{ bgcolor: "white" }}
-                />
-            )}
+            <DataGrid
+                rows={isHost ? hostReservations : guestReservations}
+                columns={isHost ? hostColumns : guestColumns}
+                pageSizeOptions={[10, 25]}
+                initialState={{
+                    pagination: { paginationModel: { pageSize: 10 } },
+                }}
+                disableRowSelectionOnClick
+                autoHeight
+                sx={{ bgcolor: "white" }}
+            />
         </Box>
     );
 }

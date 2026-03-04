@@ -112,17 +112,22 @@ export default function AccommodationDetailPage() {
                 setRatings(ratRes.data);
                 setSummary(sumRes.data);
                 // Fetch reviewer names
-                const ids = [...new Set(ratRes.data.map((r: RatingResponse) => r.guestId))];
+                const ids = [
+                    ...new Set(
+                        ratRes.data.map((r: RatingResponse) => r.guestId),
+                    ),
+                ];
                 Promise.all(
                     ids.map((gid) =>
                         usersApi
                             .getById(gid)
                             .then(({ data }) => [gid, data.username] as const)
-                            .catch(() => [gid, (gid as string).slice(0, 8)] as const),
+                            .catch(
+                                () =>
+                                    [gid, (gid as string).slice(0, 8)] as const,
+                            ),
                     ),
-                ).then((entries) =>
-                    setGuestNames(Object.fromEntries(entries)),
-                );
+                ).then((entries) => setGuestNames(Object.fromEntries(entries)));
             })
             .finally(() => setLoading(false));
     }, [id]);
@@ -552,7 +557,7 @@ export default function AccommodationDetailPage() {
                                 </>
                             )}
 
-                            {user && !isOwner && (
+                            {user && user.userType === UserType.Guest && (
                                 <Button
                                     variant="contained"
                                     fullWidth
@@ -565,6 +570,16 @@ export default function AccommodationDetailPage() {
                                     Reserve
                                 </Button>
                             )}
+
+                            {user &&
+                                !isOwner &&
+                                user.userType === UserType.Host && (
+                                    <Alert severity="info">
+                                        Hosts cannot make reservations. Switch
+                                        to a guest account to book
+                                        accommodations.
+                                    </Alert>
+                                )}
 
                             {user && isOwner && (
                                 <>
