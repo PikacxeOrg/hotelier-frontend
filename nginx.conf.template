@@ -50,7 +50,8 @@ server {
 
     location /api/cdn {
         include /etc/nginx/cors.conf;
-        rewrite ^/api/cdn/?(.*) /api/assets/$1 break;
+        # CDN serves static files at /assets/<id>, not /api/assets/<id>.
+        rewrite ^/api/cdn/?(.*) /assets/$1 break;
         proxy_pass http://cdn-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;

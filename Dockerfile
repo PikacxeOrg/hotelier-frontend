@@ -1,10 +1,11 @@
 # == Stage 1: Build ==
 FROM node:22-alpine AS build
+ARG VERSION=1.0.0
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN VITE_APP_VERSION=$VERSION npm run build
 
 # == Stage 2: Serve ==
 FROM nginx:alpine
