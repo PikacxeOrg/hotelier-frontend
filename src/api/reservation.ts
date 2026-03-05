@@ -36,4 +36,9 @@ export const reservationApi = {
         api.get<{ guestId: string; totalReservations: number; cancelledReservations: number }>(
             `${BASE}/guest-history/${guestId}`,
         ),
+
+    getBookedRanges: (accommodationId: string) =>
+        api.get<{ fromDate: string; toDate: string }[]>(`${BASE}/booked`, {
+            params: { accommodationId },
+        }),
 };

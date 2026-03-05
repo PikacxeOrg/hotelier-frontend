@@ -50,6 +50,14 @@ export default function AccommodationDetailPage() {
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [reviewError, setReviewError] = useState("");
 
+    // Host review state
+    const [hostRatings, setHostRatings] = useState<RatingResponse[]>([]);
+    const [hostSummary, setHostSummary] = useState<RatingSummaryResponse | null>(null);
+    const [hostReviewScore, setHostReviewScore] = useState<number | null>(null);
+    const [hostReviewComment, setHostReviewComment] = useState("");
+    const [hostReviewSubmitting, setHostReviewSubmitting] = useState(false);
+    const [hostReviewError, setHostReviewError] = useState("");
+
     // Gallery state
     const [activePhoto, setActivePhoto] = useState(0);
     const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -97,6 +105,23 @@ export default function AccommodationDetailPage() {
         }
     };
 
+    const loadHostRatings = async (hostId: string) => {
+        try {
+            const [ratRes, sumRes] = await Promise.all([
+                ratingApi
+                    .getByTarget(hostId, RatingTargetType.Host)
+                    .catch(() => ({ data: [] as RatingResponse[] })),
+                ratingApi
+                    .getSummary(hostId, RatingTargetType.Host)
+                    .catch(() => ({ data: null })),
+            ]);
+            setHostRatings(ratRes.data);
+            setHostSummary(sumRes.data);
+        } catch {
+            /* ignore */
+        }
+    };
+
     useEffect(() => {
         if (!id) return;
 
@@ -128,6 +153,9 @@ export default function AccommodationDetailPage() {
                             ),
                     ),
                 ).then((entries) => setGuestNames(Object.fromEntries(entries)));
+
+                // Load host ratings
+                loadHostRatings(accRes.data.hostId);
             })
             .finally(() => setLoading(false));
     }, [id]);
@@ -139,6 +167,7 @@ export default function AccommodationDetailPage() {
     const isOwner = user?.id === accommodation.hostId;
     const isGuest = user?.userType === UserType.Guest;
     const alreadyRated = ratings.some((r) => r.guestId === user?.id);
+    const alreadyRatedHost = hostRatings.some((r) => r.guestId === user?.id);
 
     const handleSubmitReview = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -170,6 +199,39 @@ export default function AccommodationDetailPage() {
             );
         } finally {
             setReviewSubmitting(false);
+        }
+    };
+
+    const handleSubmitHostReview = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!hostReviewScore || !accommodation) return;
+        setHostReviewError("");
+        setHostReviewSubmitting(true);
+        try {
+            await ratingApi.create({
+                targetId: accommodation.hostId,
+                targetType: RatingTargetType.Host,
+                score: hostReviewScore,
+                comment: hostReviewComment || undefined,
+            });
+            setHostReviewScore(null);
+            setHostReviewComment("");
+            await loadHostRatings(accommodation.hostId);
+            enqueueSnackbar("Host review submitted. Thank you!", {
+                variant: "success",
+            });
+        } catch (err: any) {
+            const msg =
+                err?.response?.data?.message ??
+                err?.response?.data ??
+                "Failed to submit review.";
+            setHostReviewError(
+                typeof msg === "string"
+                    ? msg
+                    : "Failed to submit host review. You may need a completed stay.",
+            );
+        } finally {
+            setHostReviewSubmitting(false);
         }
     };
 
@@ -506,6 +568,138 @@ export default function AccommodationDetailPage() {
                                             {reviewSubmitting
                                                 ? "Submitting…"
                                                 : "Submit Review"}
+                                        </Button>
+                                    </Box>
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Host Ratings */}
+                    <Card sx={{ mt: 3 }}>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                Host Reviews
+                                {hostSummary && ` (${hostSummary.totalRatings})`}
+                            </Typography>
+
+                            {hostSummary && hostSummary.totalRatings > 0 && (
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 1,
+                                        mb: 2,
+                                    }}
+                                >
+                                    <Rating
+                                        value={hostSummary.averageScore}
+                                        precision={0.1}
+                                        readOnly
+                                    />
+                                    <Typography>
+                                        {hostSummary.averageScore.toFixed(1)}
+                                    </Typography>
+                                </Box>
+                            )}
+
+                            <Divider sx={{ mb: 2 }} />
+
+                            {hostRatings.length === 0 ? (
+                                <Typography color="text.secondary">
+                                    No host reviews yet.
+                                </Typography>
+                            ) : (
+                                hostRatings.map((r) => (
+                                    <Box key={r.id} sx={{ mb: 2 }}>
+                                        <Box
+                                            sx={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                            }}
+                                        >
+                                            <Rating
+                                                value={r.score}
+                                                size="small"
+                                                readOnly
+                                            />
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                            >
+                                                by{" "}
+                                                {guestNames[r.guestId] ??
+                                                    r.guestId.slice(0, 8)}
+                                            </Typography>
+                                        </Box>
+                                        {r.comment && (
+                                            <Typography
+                                                variant="body2"
+                                                sx={{ mt: 0.5 }}
+                                            >
+                                                {r.comment}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                ))
+                            )}
+
+                            {/* Leave a host review */}
+                            {isGuest && !isOwner && !alreadyRatedHost && (
+                                <>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography
+                                        variant="subtitle2"
+                                        gutterBottom
+                                    >
+                                        Rate the Host
+                                    </Typography>
+                                    {hostReviewError && (
+                                        <Alert severity="error" sx={{ mb: 1 }}>
+                                            {hostReviewError}
+                                        </Alert>
+                                    )}
+                                    <Box
+                                        component="form"
+                                        onSubmit={handleSubmitHostReview}
+                                        sx={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 1,
+                                        }}
+                                    >
+                                        <Rating
+                                            value={hostReviewScore}
+                                            onChange={(_, v) =>
+                                                setHostReviewScore(v)
+                                            }
+                                        />
+                                        <TextField
+                                            label="Comment (optional)"
+                                            multiline
+                                            minRows={2}
+                                            value={hostReviewComment}
+                                            onChange={(e) =>
+                                                setHostReviewComment(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            size="small"
+                                        />
+                                        <Button
+                                            type="submit"
+                                            variant="contained"
+                                            size="small"
+                                            disabled={
+                                                !hostReviewScore ||
+                                                hostReviewSubmitting
+                                            }
+                                            sx={{ alignSelf: "flex-start" }}
+                                        >
+                                            {hostReviewSubmitting
+                                                ? "Submitting…"
+                                                : "Submit Host Review"}
                                         </Button>
                                     </Box>
                                 </>

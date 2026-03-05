@@ -51,6 +51,9 @@ export default function CreateReservationPage() {
     const [accommodation, setAccommodation] =
         useState<AccommodationResponse | null>(null);
     const [windows, setWindows] = useState<AvailabilityResponse[]>([]);
+    const [bookedRanges, setBookedRanges] = useState<
+        { fromDate: string; toDate: string }[]
+    >([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -68,10 +71,12 @@ export default function CreateReservationPage() {
         Promise.all([
             accommodationApi.getById(accommodationId),
             availabilityApi.getByAccommodation(accommodationId, true),
+            reservationApi.getBookedRanges(accommodationId),
         ])
-            .then(([accRes, avRes]) => {
+            .then(([accRes, avRes, bookedRes]) => {
                 setAccommodation(accRes.data);
                 setWindows(avRes.data);
+                setBookedRanges(bookedRes.data);
                 setForm((f) => ({ ...f, numOfGuests: accRes.data.minGuests }));
             })
             .catch(() => setError("Failed to load accommodation."))
@@ -89,6 +94,15 @@ export default function CreateReservationPage() {
             </Box>
         );
     }
+
+    const isWindowBooked = (w: AvailabilityResponse): boolean =>
+        bookedRanges.some((b) => {
+            const bFrom = b.fromDate.split("T")[0];
+            const bTo = b.toDate.split("T")[0];
+            const wFrom = w.fromDate.split("T")[0];
+            const wTo = w.toDate.split("T")[0];
+            return bFrom < wTo && bTo > wFrom;
+        });
 
     const handleSelectWindow = (w: AvailabilityResponse) => {
         setForm((f) => ({
@@ -187,49 +201,77 @@ export default function CreateReservationPage() {
                                     <TableCell>Check-out</TableCell>
                                     <TableCell>Price / night</TableCell>
                                     <TableCell>Type</TableCell>
+                                    <TableCell>Status</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {windows.map((w) => (
-                                    <TableRow
-                                        key={w.id}
-                                        hover
-                                        sx={{ cursor: "pointer" }}
-                                        onClick={() => handleSelectWindow(w)}
-                                        selected={
-                                            form.fromDate ===
-                                                w.fromDate.split("T")[0] &&
-                                            form.toDate ===
-                                                w.toDate.split("T")[0]
-                                        }
-                                    >
-                                        <TableCell>
-                                            {new Date(
-                                                w.fromDate,
-                                            ).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(
-                                                w.toDate,
-                                            ).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell>
-                                            €{w.price.toFixed(2)}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={
-                                                    w.priceType ===
-                                                    PriceType.PerGuest
-                                                        ? "Per guest"
-                                                        : "Per unit"
-                                                }
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {windows.map((w) => {
+                                    const booked = isWindowBooked(w);
+                                    return (
+                                        <TableRow
+                                            key={w.id}
+                                            hover={!booked}
+                                            sx={{
+                                                cursor: booked
+                                                    ? "default"
+                                                    : "pointer",
+                                                opacity: booked ? 0.55 : 1,
+                                            }}
+                                            onClick={() =>
+                                                !booked &&
+                                                handleSelectWindow(w)
+                                            }
+                                            selected={
+                                                !booked &&
+                                                form.fromDate ===
+                                                    w.fromDate.split("T")[0] &&
+                                                form.toDate ===
+                                                    w.toDate.split("T")[0]
+                                            }
+                                        >
+                                            <TableCell>
+                                                {new Date(
+                                                    w.fromDate,
+                                                ).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                {new Date(
+                                                    w.toDate,
+                                                ).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                €{w.price.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={
+                                                        w.priceType ===
+                                                        PriceType.PerGuest
+                                                            ? "Per guest"
+                                                            : "Per unit"
+                                                    }
+                                                    size="small"
+                                                    variant="outlined"
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={
+                                                        booked
+                                                            ? "Reserved"
+                                                            : "Available"
+                                                    }
+                                                    color={
+                                                        booked
+                                                            ? "error"
+                                                            : "success"
+                                                    }
+                                                    size="small"
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </CardContent>

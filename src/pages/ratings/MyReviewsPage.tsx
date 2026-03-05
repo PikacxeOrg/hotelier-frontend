@@ -13,19 +13,24 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
+    Link,
     Rating,
     TextField,
     Typography,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
+import { Link as RouterLink } from "react-router-dom";
 
-import { ratingApi } from "@/api";
+import { accommodationApi, ratingApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import type { RatingResponse } from "@/types";
 import { RatingTargetType } from "@/types";
 
 export default function MyReviewsPage() {
     const [reviews, setReviews] = useState<RatingResponse[]>([]);
+    const [accommodationNames, setAccommodationNames] = useState<
+        Record<string, string>
+    >({});
     const [loading, setLoading] = useState(true);
     const { enqueueSnackbar } = useSnackbar();
 
@@ -41,6 +46,30 @@ export default function MyReviewsPage() {
         try {
             const { data } = await ratingApi.getMine();
             setReviews(data);
+
+            const accommodationIds = [
+                ...new Set(
+                    data
+                        .filter(
+                            (r) =>
+                                r.targetType === RatingTargetType.Accommodation,
+                        )
+                        .map((r) => r.targetId),
+                ),
+            ];
+
+            const entries = await Promise.all(
+                accommodationIds.map(async (id) => {
+                    try {
+                        const { data: acc } =
+                            await accommodationApi.getById(id);
+                        return [id, acc.name] as const;
+                    } catch {
+                        return [id, id] as const;
+                    }
+                }),
+            );
+            setAccommodationNames(Object.fromEntries(entries));
         } catch {
             enqueueSnackbar("Failed to load reviews.", { variant: "error" });
         } finally {
@@ -135,6 +164,18 @@ export default function MyReviewsPage() {
                                         size="small"
                                         variant="outlined"
                                     />
+                                    {r.targetType ===
+                                        RatingTargetType.Accommodation && (
+                                        <Link
+                                            component={RouterLink}
+                                            to={`/accommodations/${r.targetId}`}
+                                            variant="caption"
+                                            underline="hover"
+                                        >
+                                            {accommodationNames[r.targetId] ??
+                                                "View accommodation"}
+                                        </Link>
+                                    )}
                                 </Box>
                                 {r.comment && (
                                     <Typography variant="body2">

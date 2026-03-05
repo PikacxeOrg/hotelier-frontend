@@ -46,70 +46,92 @@ export default function ReservationsPage() {
         Record<string, string>
     >({});
     const [guestNames, setGuestNames] = useState<Record<string, string>>({});
+    const [cancelCounts, setCancelCounts] = useState<Record<string, number>>(
+        {},
+    );
 
     const isHost = user?.userType === UserType.Host;
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                if (isHost) {
-                    const { data } = await reservationApi.getHostReservations();
-                    setHostReservations(data);
+    const load = async () => {
+        try {
+            if (isHost) {
+                const { data } = await reservationApi.getHostReservations();
+                setHostReservations(data);
 
-                    // Enrich: unique accommodation IDs and guest user IDs
-                    const accIds = [
-                        ...new Set(data.map((r) => r.accommodationId)),
-                    ];
-                    const userIds = [...new Set(data.map((r) => r.userId))];
+                // Enrich: unique accommodation IDs and guest user IDs
+                const accIds = [...new Set(data.map((r) => r.accommodationId))];
+                const userIds = [...new Set(data.map((r) => r.userId))];
 
-                    const [accResults, userResults] = await Promise.all([
-                        Promise.allSettled(
-                            accIds.map((id) => accommodationApi.getById(id)),
-                        ),
-                        Promise.allSettled(
-                            userIds.map((id) => usersApi.getById(id)),
-                        ),
-                    ]);
-
-                    const accMap: Record<string, string> = {};
-                    accResults.forEach((res, i) => {
-                        if (res.status === "fulfilled")
-                            accMap[accIds[i]] = res.value.data.name;
-                    });
-                    setAccommodationNames(accMap);
-
-                    const userMap: Record<string, string> = {};
-                    userResults.forEach((res, i) => {
-                        if (res.status === "fulfilled")
-                            userMap[userIds[i]] = res.value.data.username;
-                    });
-                    setGuestNames(userMap);
-                } else {
-                    const { data } = await reservationApi.getMyReservations();
-                    setGuestReservations(data);
-
-                    // Enrich accommodation names for guest view too
-                    const accIds = [
-                        ...new Set(data.map((r) => r.accommodationId)),
-                    ];
-                    const accResults = await Promise.allSettled(
+                const [accResults, userResults] = await Promise.all([
+                    Promise.allSettled(
                         accIds.map((id) => accommodationApi.getById(id)),
-                    );
-                    const accMap: Record<string, string> = {};
-                    accResults.forEach((res, i) => {
-                        if (res.status === "fulfilled")
-                            accMap[accIds[i]] = res.value.data.name;
-                    });
-                    setAccommodationNames(accMap);
-                }
-            } catch {
-                enqueueSnackbar("Failed to load reservations.", {
-                    variant: "error",
+                    ),
+                    Promise.allSettled(
+                        userIds.map((id) => usersApi.getById(id)),
+                    ),
+                ]);
+
+                const accMap: Record<string, string> = {};
+                accResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        accMap[accIds[i]] = res.value.data.name;
                 });
-            } finally {
-                setLoading(false);
+                setAccommodationNames(accMap);
+
+                const userMap: Record<string, string> = {};
+                userResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        userMap[userIds[i]] = res.value.data.username;
+                });
+                setGuestNames(userMap);
+
+                // Cancellation history for guests with pending requests
+                const pendingGuestIds = [
+                    ...new Set(
+                        data
+                            .filter(
+                                (r) => r.status === ReservationStatus.Pending,
+                            )
+                            .map((r) => r.userId),
+                    ),
+                ];
+                const historyResults = await Promise.allSettled(
+                    pendingGuestIds.map((id) =>
+                        reservationApi.getGuestHistory(id),
+                    ),
+                );
+                const countMap: Record<string, number> = {};
+                historyResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        countMap[pendingGuestIds[i]] =
+                            res.value.data.cancelledReservations;
+                });
+                setCancelCounts(countMap);
+            } else {
+                const { data } = await reservationApi.getMyReservations();
+                setGuestReservations(data);
+
+                // Enrich accommodation names for guest view too
+                const accIds = [...new Set(data.map((r) => r.accommodationId))];
+                const accResults = await Promise.allSettled(
+                    accIds.map((id) => accommodationApi.getById(id)),
+                );
+                const accMap: Record<string, string> = {};
+                accResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        accMap[accIds[i]] = res.value.data.name;
+                });
+                setAccommodationNames(accMap);
             }
-        };
+        } catch {
+            enqueueSnackbar("Failed to load reservations.", {
+                variant: "error",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => {
         load();
     }, [isHost]);
 
@@ -124,6 +146,7 @@ export default function ReservationsPage() {
                 ),
             );
             enqueueSnackbar("Reservation approved.", { variant: "success" });
+            load();
         } catch {
             enqueueSnackbar("Failed to approve reservation.", {
                 variant: "error",
@@ -142,6 +165,7 @@ export default function ReservationsPage() {
                 ),
             );
             enqueueSnackbar("Reservation rejected.", { variant: "success" });
+            load();
         } catch {
             enqueueSnackbar("Failed to reject reservation.", {
                 variant: "error",
@@ -271,15 +295,38 @@ export default function ReservationsPage() {
         {
             field: "userId",
             headerName: "Guest",
-            width: 140,
-            renderCell: ({ value }) =>
-                guestNames[value] ? (
-                    <Typography variant="body2">{guestNames[value]}</Typography>
-                ) : (
-                    <Typography variant="body2" color="text.secondary">
-                        {value.slice(0, 8)}…
-                    </Typography>
-                ),
+            width: 180,
+            renderCell: ({ row, value }) => {
+                const name = guestNames[value];
+                const cancels = cancelCounts[value];
+                return (
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.25,
+                            py: 0.5,
+                        }}
+                    >
+                        <Typography variant="body2">
+                            {(name ?? value == null)
+                                ? "deleted user"
+                                : value.slice(0, 8) + "…"}
+                        </Typography>
+                        {row.status === ReservationStatus.Pending &&
+                            cancels != null &&
+                            cancels > 0 && (
+                                <Chip
+                                    label={`${cancels} cancellation${
+                                        cancels !== 1 ? "s" : ""
+                                    }`}
+                                    color="warning"
+                                    size="small"
+                                />
+                            )}
+                    </Box>
+                );
+            },
         },
         statusCol,
         {

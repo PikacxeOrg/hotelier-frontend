@@ -77,6 +77,7 @@ export default function EditAccommodationPage() {
         e.preventDefault();
         setSaving(true);
         try {
+            console.log("Submitting with pictures:", pictures);
             await accommodationApi.update(accommodation.id, {
                 name: form.name,
                 location: form.location,
@@ -84,6 +85,7 @@ export default function EditAccommodationPage() {
                     .split(",")
                     .map((a) => a.trim())
                     .filter(Boolean),
+                pictures: pictures,
                 minGuests: form.minGuests,
                 maxGuests: form.maxGuests,
                 autoApproval: form.autoApproval,
