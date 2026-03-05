@@ -5,29 +5,37 @@ server {
     root   /usr/share/nginx/html;
     index  index.html;
 
-    # -- SPA catch-all --
+    # Define the CORS origin variable
+    set $cors_origin $http_origin;
+
+    # --------------------------
+    # CDN /assets proxy
+    # --------------------------
+    location ^~ /assets/ {
+        include /etc/nginx/cors.conf;
+
+        proxy_pass http://cdn-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Cache CDN content
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # --------------------------
+    # SPA catch-all
+    # --------------------------
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # -- API reverse proxies --
-    # When proxy_pass includes a URI suffix, nginx automatically replaces the
-    # matched location prefix with that suffix — no rewrite directives needed.
-    # e.g. /api/identity/auth/login  →  http://identity-service:8080/api/auth/login
-    #      /api/accommodations/1     →  http://accommodation-service:8080/api/accommodation/1
-    #
-    # In Kubernetes these blocks are never reached: the nginx Ingress routes
-    # all /api/ traffic directly to backend services before it hits this pod.
-
-    # -- CORS helper --
-    set $cors_origin $http_origin;
-
-    # Path-remapping proxies: frontend prefix differs from backend prefix.
-    # rewrite + proxy_pass without a URI suffix → rewrite applies to upstream.
-    # e.g. /api/identity/auth/login  →  http://identity-service:8080/api/auth/login
-    #      /api/accommodations/1     →  http://accommodation-service:8080/api/accommodation/1
-    #      /api/cdn/foo.jpg          →  http://cdn-service:8080/api/assets/foo.jpg
-
+    # --------------------------
+    # API reverse proxies
+    # --------------------------
+    # Identity
     location /api/identity {
         include /etc/nginx/cors.conf;
         rewrite ^/api/identity/?(.*) /api/$1 break;
@@ -38,6 +46,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Accommodations
     location /api/accommodations {
         include /etc/nginx/cors.conf;
         rewrite ^/api/accommodations/?(.*) /api/accommodation/$1 break;
@@ -48,10 +57,9 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # CDN API
     location /api/cdn {
         include /etc/nginx/cors.conf;
-        # CDN serves static files at /assets/<id>, not /api/assets/<id>.
-        rewrite ^/api/cdn/?(.*) /assets/$1 break;
         proxy_pass http://cdn-service:8080;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
@@ -59,10 +67,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Pass-through proxies: frontend prefix = backend prefix.
-    # No trailing slash on location → matches /api/X and /api/X/...
-    # No URI suffix on proxy_pass  → full URI forwarded as-is.
-
+    # Pass-through APIs
     location /api/availability {
         include /etc/nginx/cors.conf;
         proxy_pass http://availability-service:8080;
@@ -90,6 +95,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # SSE Notifications
+    location /api/notifications/stream {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://notification-service:8080/api/notification/stream;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 3600s;
+        keepalive_timeout 3600s;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
     location /api/notifications {
         include /etc/nginx/cors.conf;
         proxy_pass http://notification-service:8080;
@@ -108,13 +127,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # -- Static asset caching --
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    # --------------------------
+    # Static asset caching (exclude /assets/)
+    # --------------------------
+    location ~* ^/(?!assets/).*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 
-    # -- Gzip --
+    # --------------------------
+    # Gzip
+    # --------------------------
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
     gzip_min_length 256;
