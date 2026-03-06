@@ -1,0 +1,147 @@
+server {
+    listen       80;
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    # Define the CORS origin variable
+    set $cors_origin $http_origin;
+
+
+
+    # --------------------------
+    # SPA catch-all
+    # --------------------------
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # --------------------------
+    # API reverse proxies
+    # --------------------------
+    
+    # Identity
+    location /api/identity {
+        include /etc/nginx/cors.conf;
+        rewrite ^/api/identity/?(.*) /api/$1 break;
+        proxy_pass http://identity-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Accommodations
+    location /api/accommodations {
+        include /etc/nginx/cors.conf;
+        rewrite ^/api/accommodations/?(.*) /api/accommodation/$1 break;
+        proxy_pass http://accommodation-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # CDN API
+    location /api/cdn {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://cdn-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # --------------------------
+    # CDN /assets proxy
+    # --------------------------
+    location ^~ /cdn-assets/ {
+        include /etc/nginx/cors.conf;
+
+        proxy_pass http://cdn-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Cache CDN content
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Pass-through APIs
+    location /api/availability {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://availability-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/reservations {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://reservation-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ratings {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://rating-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SSE Notifications
+    location /api/notifications/stream {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://notification-service:8080/api/notification/stream;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 3600s;
+        keepalive_timeout 3600s;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
+    location /api/notifications {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://notification-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/search {
+        include /etc/nginx/cors.conf;
+        proxy_pass http://search-service:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # --------------------------
+    # Static asset caching (exclude /assets/)
+    # --------------------------
+    location ~* ^/(?!assets/).*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # --------------------------
+    # Gzip
+    # --------------------------
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+    gzip_min_length 256;
+}
