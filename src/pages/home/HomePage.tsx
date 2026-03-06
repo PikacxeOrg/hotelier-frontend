@@ -163,103 +163,106 @@ export default function HomePage() {
             )}
 
             <Grid container spacing={3}>
-                {results.map((item) => (
-                    <Grid
-                        size={{ xs: 12, sm: 6, md: 4 }}
-                        key={item.accommodationId}
-                    >
-                        <Card
-                            sx={{
-                                cursor: "pointer",
-                                height: "100%",
-                                display: "flex",
-                                flexDirection: "column",
-                            }}
-                            onClick={() =>
-                                navigate(
-                                    `/accommodations/${item.accommodationId}`,
-                                )
-                            }
+                {results &&
+                    results.map((item) => (
+                        <Grid
+                            size={{ xs: 12, sm: 6, md: 4 }}
+                            key={item.accommodationId}
                         >
-                            <CardMedia
-                                component="img"
-                                height="180"
-                                image={item.pictures[0] ?? "/placeholder.jpg"}
-                                alt={item.name}
-                                sx={{ objectFit: "cover" }}
-                            />
+                            <Card
+                                sx={{
+                                    cursor: "pointer",
+                                    height: "100%",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                }}
+                                onClick={() =>
+                                    navigate(
+                                        `/accommodations/${item.accommodationId}`,
+                                    )
+                                }
+                            >
+                                <CardMedia
+                                    component="img"
+                                    height="180"
+                                    image={
+                                        item.pictures[0] ?? "/placeholder.jpg"
+                                    }
+                                    alt={item.name}
+                                    sx={{ objectFit: "cover" }}
+                                />
 
-                            <CardContent sx={{ flex: 1 }}>
-                                <Typography variant="h6" noWrap>
-                                    {item.name}
-                                </Typography>
-
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    gutterBottom
-                                >
-                                    {item.location}
-                                </Typography>
-
-                                <Box
-                                    sx={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 0.5,
-                                        mb: 1,
-                                    }}
-                                >
-                                    <Rating
-                                        value={item.averageRating}
-                                        precision={0.5}
-                                        size="small"
-                                        readOnly
-                                    />
-                                    <Typography variant="caption">
-                                        ({item.totalRatings})
+                                <CardContent sx={{ flex: 1 }}>
+                                    <Typography variant="h6" noWrap>
+                                        {item.name}
                                     </Typography>
-                                </Box>
 
-                                <Box
-                                    sx={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        gap: 0.5,
-                                        mb: 1,
-                                    }}
-                                >
-                                    {item.amenities.slice(0, 3).map((a) => (
-                                        <Chip
-                                            key={a}
-                                            label={a}
-                                            size="small"
-                                            variant="outlined"
-                                        />
-                                    ))}
-                                </Box>
-
-                                {item.totalPrice != null && (
                                     <Typography
-                                        variant="subtitle1"
-                                        fontWeight="bold"
-                                    >
-                                        €{item.totalPrice.toFixed(2)} total
-                                    </Typography>
-                                )}
-
-                                {item.unitPrice != null && (
-                                    <Typography
-                                        variant="caption"
+                                        variant="body2"
                                         color="text.secondary"
+                                        gutterBottom
                                     >
-                                        €{item.unitPrice.toFixed(2)} / night
+                                        {item.location}
                                     </Typography>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                ))}
+
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 0.5,
+                                            mb: 1,
+                                        }}
+                                    >
+                                        <Rating
+                                            value={item.averageRating}
+                                            precision={0.5}
+                                            size="small"
+                                            readOnly
+                                        />
+                                        <Typography variant="caption">
+                                            ({item.totalRatings})
+                                        </Typography>
+                                    </Box>
+
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: 0.5,
+                                            mb: 1,
+                                        }}
+                                    >
+                                        {item.amenities.slice(0, 3).map((a) => (
+                                            <Chip
+                                                key={a}
+                                                label={a}
+                                                size="small"
+                                                variant="outlined"
+                                            />
+                                        ))}
+                                    </Box>
+
+                                    {item.totalPrice != null && (
+                                        <Typography
+                                            variant="subtitle1"
+                                            fontWeight="bold"
+                                        >
+                                            €{item.totalPrice.toFixed(2)} total
+                                        </Typography>
+                                    )}
+
+                                    {item.unitPrice != null && (
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                        >
+                                            €{item.unitPrice.toFixed(2)} / night
+                                        </Typography>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    ))}
             </Grid>
 
             {/* -- Pagination --------------------------- */}
