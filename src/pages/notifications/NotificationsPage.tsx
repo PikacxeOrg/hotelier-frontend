@@ -43,7 +43,7 @@ export default function NotificationsPage() {
                 }),
             )
             .finally(() => setLoading(false));
-    }, []);
+    }, [enqueueSnackbar]);
 
     const handleMarkRead = async (id: string) => {
         try {

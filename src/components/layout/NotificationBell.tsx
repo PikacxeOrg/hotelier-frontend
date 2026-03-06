@@ -32,12 +32,11 @@ export default function NotificationBell() {
 
     useEffect(() => {
         if (!isAuthenticated) {
-            setCount(0);
             return;
         }
 
         // Initial count
-        fetchCount();
+        fetchCount(); // eslint-disable-line react-hooks/set-state-in-effect
 
         // --- SSE connection ---
         const token = localStorage.getItem("accessToken");
@@ -84,11 +83,10 @@ export default function NotificationBell() {
                 color="inherit"
                 onClick={() => navigate("/notifications")}
             >
-                <Badge badgeContent={count} color="error">
+                <Badge badgeContent={isAuthenticated ? count : 0} color="error">
                     <NotificationsIcon />
                 </Badge>
             </IconButton>
         </Tooltip>
     );
 }
-

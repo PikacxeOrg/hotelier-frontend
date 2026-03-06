@@ -52,7 +52,8 @@ export default function AccommodationDetailPage() {
 
     // Host review state
     const [hostRatings, setHostRatings] = useState<RatingResponse[]>([]);
-    const [hostSummary, setHostSummary] = useState<RatingSummaryResponse | null>(null);
+    const [hostSummary, setHostSummary] =
+        useState<RatingSummaryResponse | null>(null);
     const [hostReviewScore, setHostReviewScore] = useState<number | null>(null);
     const [hostReviewComment, setHostReviewComment] = useState("");
     const [hostReviewSubmitting, setHostReviewSubmitting] = useState(false);
@@ -187,16 +188,15 @@ export default function AccommodationDetailPage() {
             enqueueSnackbar("Review submitted. Thank you!", {
                 variant: "success",
             });
-        } catch (err: any) {
+        } catch (err) {
+            const e = err as {
+                response?: { data?: { message?: string } | string };
+            };
+            const data = e?.response?.data;
             const msg =
-                err?.response?.data?.message ??
-                err?.response?.data ??
+                (typeof data === "object" ? data?.message : data) ??
                 "Failed to submit review.";
-            setReviewError(
-                typeof msg === "string"
-                    ? msg
-                    : "Failed to submit review. You may need a completed stay.",
-            );
+            setReviewError(msg);
         } finally {
             setReviewSubmitting(false);
         }
@@ -220,16 +220,15 @@ export default function AccommodationDetailPage() {
             enqueueSnackbar("Host review submitted. Thank you!", {
                 variant: "success",
             });
-        } catch (err: any) {
+        } catch (err) {
+            const e = err as {
+                response?: { data?: { message?: string } | string };
+            };
+            const data = e?.response?.data;
             const msg =
-                err?.response?.data?.message ??
-                err?.response?.data ??
-                "Failed to submit review.";
-            setHostReviewError(
-                typeof msg === "string"
-                    ? msg
-                    : "Failed to submit host review. You may need a completed stay.",
-            );
+                (typeof data === "object" ? data?.message : data) ??
+                "Failed to submit host review.";
+            setHostReviewError(msg);
         } finally {
             setHostReviewSubmitting(false);
         }
@@ -580,7 +579,8 @@ export default function AccommodationDetailPage() {
                         <CardContent>
                             <Typography variant="h6" gutterBottom>
                                 Host Reviews
-                                {hostSummary && ` (${hostSummary.totalRatings})`}
+                                {hostSummary &&
+                                    ` (${hostSummary.totalRatings})`}
                             </Typography>
 
                             {hostSummary && hostSummary.totalRatings > 0 && (

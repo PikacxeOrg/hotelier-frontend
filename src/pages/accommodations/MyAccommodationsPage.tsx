@@ -39,7 +39,7 @@ export default function MyAccommodationsPage() {
                 }),
             )
             .finally(() => setLoading(false));
-    }, [user]);
+    }, [user, enqueueSnackbar]);
 
     if (loading) return <LoadingScreen />;
 

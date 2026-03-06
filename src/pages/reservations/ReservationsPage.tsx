@@ -133,7 +133,7 @@ export default function ReservationsPage() {
     };
     useEffect(() => {
         load();
-    }, [isHost]);
+    }, [isHost]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleApprove = async (id: string) => {
         try {

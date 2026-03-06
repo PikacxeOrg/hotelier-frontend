@@ -69,7 +69,7 @@ export default function AvailabilityManagementPage() {
 
     useEffect(() => {
         load();
-    }, [id]);
+    }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) return <LoadingScreen />;
     if (!accommodation)

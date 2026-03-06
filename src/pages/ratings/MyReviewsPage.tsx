@@ -79,7 +79,7 @@ export default function MyReviewsPage() {
 
     useEffect(() => {
         load();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleDelete = async (id: string) => {
         if (!confirm("Delete this review?")) return;

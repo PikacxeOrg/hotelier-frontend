@@ -65,7 +65,7 @@ export default function HomePage() {
 
     useEffect(() => {
         handleSearch();
-    }, [filters.page]);
+    }, [filters.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <Box>

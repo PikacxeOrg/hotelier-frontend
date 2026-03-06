@@ -60,7 +60,7 @@ export default function EditAccommodationPage() {
                 }),
             )
             .finally(() => setLoading(false));
-    }, [id]);
+    }, [id, enqueueSnackbar]);
 
     if (loading) return <LoadingScreen />;
     if (!accommodation)
