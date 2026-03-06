@@ -13,6 +13,7 @@ export interface UpdateAccommodationRequest {
     name?: string;
     location?: string;
     amenities?: string[];
+    pictures: string[];
     minGuests?: number;
     maxGuests?: number;
     autoApproval?: boolean;

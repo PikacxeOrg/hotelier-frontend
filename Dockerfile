@@ -1,28 +1,19 @@
 # == Stage 1: Build ==
 FROM node:22-alpine AS build
+ARG VERSION=1.0.0
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN VITE_APP_VERSION=$VERSION npm run build
 
 # == Stage 2: Serve ==
 FROM nginx:alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
-
-# Default to port 80 (Kubernetes Service port).
-# Override to 8080 for Docker Compose (container-to-container).
-ENV BACKEND_PORT=80
-
-# DNS resolver: 127.0.0.11 for Docker, kube-dns IP for Kubernetes.
-ENV DNS_RESOLVER=127.0.0.11
-
-# Service DNS suffix: empty for Docker Compose/Swarm, .namespace.svc.cluster.local for K8s.
-ENV SERVICE_SUFFIX=
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf
+COPY cors.conf /etc/nginx/cors.conf
 
 EXPOSE 80
 
-# envsubst replaces $BACKEND_PORT, $DNS_RESOLVER, and $SERVICE_SUFFIX
-CMD ["/bin/sh", "-c", "envsubst '${BACKEND_PORT} ${DNS_RESOLVER} ${SERVICE_SUFFIX}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["nginx", "-g", "daemon off;"]

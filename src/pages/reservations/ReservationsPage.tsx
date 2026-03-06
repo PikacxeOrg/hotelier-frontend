@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { Box, Button, Chip, Tab, Tabs, Typography } from "@mui/material";
+import { Box, Button, Chip, Link, Typography } from "@mui/material";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { useSnackbar } from "notistack";
 
-import { reservationApi } from "@/api";
+import { accommodationApi, reservationApi, usersApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import { useAuth } from "@/contexts";
 import type { ReservationResponse } from "@/types";
@@ -30,7 +32,8 @@ const statusLabels: Record<ReservationStatus, string> = {
 
 export default function ReservationsPage() {
     const { user } = useAuth();
-    const [tab, setTab] = useState(0);
+    const { enqueueSnackbar } = useSnackbar();
+    const navigate = useNavigate();
     const [guestReservations, setGuestReservations] = useState<
         ReservationResponse[]
     >([]);
@@ -38,50 +41,136 @@ export default function ReservationsPage() {
         ReservationResponse[]
     >([]);
     const [loading, setLoading] = useState(true);
+    // enrichment maps
+    const [accommodationNames, setAccommodationNames] = useState<
+        Record<string, string>
+    >({});
+    const [guestNames, setGuestNames] = useState<Record<string, string>>({});
+    const [cancelCounts, setCancelCounts] = useState<Record<string, number>>(
+        {},
+    );
 
     const isHost = user?.userType === UserType.Host;
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const [guestRes, hostRes] = await Promise.allSettled([
-                    reservationApi.getMyReservations(),
-                    isHost
-                        ? reservationApi.getHostReservations()
-                        : Promise.resolve({
-                              data: [] as ReservationResponse[],
-                          }),
+    const load = async () => {
+        try {
+            if (isHost) {
+                const { data } = await reservationApi.getHostReservations();
+                setHostReservations(data);
+
+                // Enrich: unique accommodation IDs and guest user IDs
+                const accIds = [...new Set(data.map((r) => r.accommodationId))];
+                const userIds = [...new Set(data.map((r) => r.userId))];
+
+                const [accResults, userResults] = await Promise.all([
+                    Promise.allSettled(
+                        accIds.map((id) => accommodationApi.getById(id)),
+                    ),
+                    Promise.allSettled(
+                        userIds.map((id) => usersApi.getById(id)),
+                    ),
                 ]);
 
-                if (guestRes.status === "fulfilled")
-                    setGuestReservations(guestRes.value.data);
-                if (hostRes.status === "fulfilled")
-                    setHostReservations(hostRes.value.data);
-            } catch {
-                /* TODO */
-            } finally {
-                setLoading(false);
+                const accMap: Record<string, string> = {};
+                accResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        accMap[accIds[i]] = res.value.data.name;
+                });
+                setAccommodationNames(accMap);
+
+                const userMap: Record<string, string> = {};
+                userResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        userMap[userIds[i]] = res.value.data.username;
+                });
+                setGuestNames(userMap);
+
+                // Cancellation history for guests with pending requests
+                const pendingGuestIds = [
+                    ...new Set(
+                        data
+                            .filter(
+                                (r) => r.status === ReservationStatus.Pending,
+                            )
+                            .map((r) => r.userId),
+                    ),
+                ];
+                const historyResults = await Promise.allSettled(
+                    pendingGuestIds.map((id) =>
+                        reservationApi.getGuestHistory(id),
+                    ),
+                );
+                const countMap: Record<string, number> = {};
+                historyResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        countMap[pendingGuestIds[i]] =
+                            res.value.data.cancelledReservations;
+                });
+                setCancelCounts(countMap);
+            } else {
+                const { data } = await reservationApi.getMyReservations();
+                setGuestReservations(data);
+
+                // Enrich accommodation names for guest view too
+                const accIds = [...new Set(data.map((r) => r.accommodationId))];
+                const accResults = await Promise.allSettled(
+                    accIds.map((id) => accommodationApi.getById(id)),
+                );
+                const accMap: Record<string, string> = {};
+                accResults.forEach((res, i) => {
+                    if (res.status === "fulfilled")
+                        accMap[accIds[i]] = res.value.data.name;
+                });
+                setAccommodationNames(accMap);
             }
-        };
+        } catch {
+            enqueueSnackbar("Failed to load reservations.", {
+                variant: "error",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => {
         load();
-    }, [isHost]);
+    }, [isHost]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleApprove = async (id: string) => {
-        await reservationApi.approve(id);
-        setHostReservations((prev) =>
-            prev.map((r) =>
-                r.id === id ? { ...r, status: ReservationStatus.Approved } : r,
-            ),
-        );
+        try {
+            await reservationApi.approve(id);
+            setHostReservations((prev) =>
+                prev.map((r) =>
+                    r.id === id
+                        ? { ...r, status: ReservationStatus.Approved }
+                        : r,
+                ),
+            );
+            enqueueSnackbar("Reservation approved.", { variant: "success" });
+            load();
+        } catch {
+            enqueueSnackbar("Failed to approve reservation.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleReject = async (id: string) => {
-        await reservationApi.reject(id);
-        setHostReservations((prev) =>
-            prev.map((r) =>
-                r.id === id ? { ...r, status: ReservationStatus.Denied } : r,
-            ),
-        );
+        try {
+            await reservationApi.reject(id);
+            setHostReservations((prev) =>
+                prev.map((r) =>
+                    r.id === id
+                        ? { ...r, status: ReservationStatus.Denied }
+                        : r,
+                ),
+            );
+            enqueueSnackbar("Reservation rejected.", { variant: "success" });
+            load();
+        } catch {
+            enqueueSnackbar("Failed to reject reservation.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleCancel = async (id: string) => {
@@ -94,8 +183,12 @@ export default function ReservationsPage() {
                         : r,
                 ),
             );
+            enqueueSnackbar("Reservation cancelled.", { variant: "success" });
         } catch {
-            /* cancellation may fail if < 1 day before start */
+            enqueueSnackbar(
+                "Cannot cancel — the check-in date may be too close.",
+                { variant: "error" },
+            );
         }
     };
 
@@ -103,47 +196,70 @@ export default function ReservationsPage() {
         try {
             await reservationApi.delete(id);
             setGuestReservations((prev) => prev.filter((r) => r.id !== id));
+            enqueueSnackbar("Reservation deleted.", { variant: "success" });
         } catch {
-            /* TODO */
+            enqueueSnackbar("Failed to delete reservation.", {
+                variant: "error",
+            });
         }
     };
 
-    const baseColumns: GridColDef[] = [
+    // Shared columns
+    const accommodationCol: GridColDef = {
+        field: "accommodationId",
+        headerName: "Accommodation",
+        flex: 1,
+        minWidth: 160,
+        renderCell: ({ value }) => (
+            <Link
+                component="button"
+                underline="hover"
+                onClick={() => navigate(`/accommodations/${value}`)}
+            >
+                {accommodationNames[value] ?? value.slice(0, 8) + "…"}
+            </Link>
+        ),
+    };
+
+    const dateColumns: GridColDef[] = [
         {
             field: "fromDate",
             headerName: "Check-in",
-            width: 120,
+            width: 110,
             valueFormatter: (value: string) =>
                 new Date(value).toLocaleDateString(),
         },
         {
             field: "toDate",
             headerName: "Check-out",
-            width: 120,
+            width: 110,
             valueFormatter: (value: string) =>
                 new Date(value).toLocaleDateString(),
         },
-        { field: "numOfGuests", headerName: "Guests", width: 80 },
-        {
-            field: "status",
-            headerName: "Status",
-            width: 130,
-            renderCell: ({ value }) => (
-                <Chip
-                    label={statusLabels[value as ReservationStatus]}
-                    color={statusColors[value as ReservationStatus]}
-                    size="small"
-                />
-            ),
-        },
+        { field: "numOfGuests", headerName: "Guests", width: 70 },
     ];
 
+    const statusCol: GridColDef = {
+        field: "status",
+        headerName: "Status",
+        width: 120,
+        renderCell: ({ value }) => (
+            <Chip
+                label={statusLabels[value as ReservationStatus]}
+                color={statusColors[value as ReservationStatus]}
+                size="small"
+            />
+        ),
+    };
+
     const guestColumns: GridColDef[] = [
-        ...baseColumns,
+        accommodationCol,
+        ...dateColumns,
+        statusCol,
         {
             field: "actions",
             headerName: "",
-            width: 160,
+            width: 120,
             sortable: false,
             renderCell: ({ row }) => {
                 if (row.status === ReservationStatus.Pending) {
@@ -174,7 +290,45 @@ export default function ReservationsPage() {
     ];
 
     const hostColumns: GridColDef[] = [
-        ...baseColumns,
+        accommodationCol,
+        ...dateColumns,
+        {
+            field: "userId",
+            headerName: "Guest",
+            width: 180,
+            renderCell: ({ row, value }) => {
+                const name = guestNames[value];
+                const cancels = cancelCounts[value];
+                return (
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.25,
+                            py: 0.5,
+                        }}
+                    >
+                        <Typography variant="body2">
+                            {(name ?? value == null)
+                                ? "deleted user"
+                                : value.slice(0, 8) + "…"}
+                        </Typography>
+                        {row.status === ReservationStatus.Pending &&
+                            cancels != null &&
+                            cancels > 0 && (
+                                <Chip
+                                    label={`${cancels} cancellation${
+                                        cancels !== 1 ? "s" : ""
+                                    }`}
+                                    color="warning"
+                                    size="small"
+                                />
+                            )}
+                    </Box>
+                );
+            },
+        },
+        statusCol,
         {
             field: "actions",
             headerName: "",
@@ -209,43 +363,20 @@ export default function ReservationsPage() {
     return (
         <Box>
             <Typography variant="h4" gutterBottom>
-                Reservations
+                {isHost ? "Guest Requests" : "My Reservations"}
             </Typography>
 
-            {isHost && (
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-                    <Tab label="My Reservations" />
-                    <Tab label="Guest Requests" />
-                </Tabs>
-            )}
-
-            {tab === 0 && (
-                <DataGrid
-                    rows={guestReservations}
-                    columns={guestColumns}
-                    pageSizeOptions={[10, 25]}
-                    initialState={{
-                        pagination: { paginationModel: { pageSize: 10 } },
-                    }}
-                    disableRowSelectionOnClick
-                    autoHeight
-                    sx={{ bgcolor: "white" }}
-                />
-            )}
-
-            {tab === 1 && isHost && (
-                <DataGrid
-                    rows={hostReservations}
-                    columns={hostColumns}
-                    pageSizeOptions={[10, 25]}
-                    initialState={{
-                        pagination: { paginationModel: { pageSize: 10 } },
-                    }}
-                    disableRowSelectionOnClick
-                    autoHeight
-                    sx={{ bgcolor: "white" }}
-                />
-            )}
+            <DataGrid
+                rows={isHost ? hostReservations : guestReservations}
+                columns={isHost ? hostColumns : guestColumns}
+                pageSizeOptions={[10, 25]}
+                initialState={{
+                    pagination: { paginationModel: { pageSize: 10 } },
+                }}
+                disableRowSelectionOnClick
+                autoHeight
+                sx={{ bgcolor: "white" }}
+            />
         </Box>
     );
 }

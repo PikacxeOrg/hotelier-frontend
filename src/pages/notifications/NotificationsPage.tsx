@@ -17,6 +17,7 @@ import {
 import { notificationApi } from "@/api";
 import { LoadingScreen } from "@/components";
 import type { NotificationResponse } from "@/types";
+import { useSnackbar } from "notistack";
 
 export default function NotificationsPage() {
     const [notifications, setNotifications] = useState<NotificationResponse[]>(
@@ -25,6 +26,7 @@ export default function NotificationsPage() {
     const [preferences, setPreferences] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
     const [showPrefs, setShowPrefs] = useState(false);
+    const { enqueueSnackbar } = useSnackbar();
 
     useEffect(() => {
         Promise.all([
@@ -35,32 +37,68 @@ export default function NotificationsPage() {
                 setNotifications(notifRes.data.items);
                 setPreferences(prefRes.data.preferences);
             })
+            .catch(() =>
+                enqueueSnackbar("Failed to load notifications.", {
+                    variant: "error",
+                }),
+            )
             .finally(() => setLoading(false));
-    }, []);
+    }, [enqueueSnackbar]);
 
     const handleMarkRead = async (id: string) => {
-        await notificationApi.markAsRead(id);
-        setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-        );
+        try {
+            await notificationApi.markAsRead(id);
+            setNotifications((prev) =>
+                prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+            );
+        } catch {
+            enqueueSnackbar("Failed to mark notification as read.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleMarkAllRead = async () => {
-        await notificationApi.markAllAsRead();
-        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+        try {
+            await notificationApi.markAllAsRead();
+            setNotifications((prev) =>
+                prev.map((n) => ({ ...n, isRead: true })),
+            );
+            enqueueSnackbar("All notifications marked as read.", {
+                variant: "success",
+            });
+        } catch {
+            enqueueSnackbar("Failed to mark all as read.", {
+                variant: "error",
+            });
+        }
     };
 
     const handleDelete = async (id: string) => {
-        await notificationApi.delete(id);
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
+        try {
+            await notificationApi.delete(id);
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+        } catch {
+            enqueueSnackbar("Failed to delete notification.", {
+                variant: "error",
+            });
+        }
     };
 
     const handlePrefChange = async (key: string, value: boolean) => {
         const updated = { ...preferences, [key]: value };
         setPreferences(updated);
-        await notificationApi.updatePreferences({
-            preferences: { [key]: value },
-        });
+        try {
+            await notificationApi.updatePreferences({
+                preferences: { [key]: value },
+            });
+            enqueueSnackbar("Preferences saved.", { variant: "success" });
+        } catch {
+            setPreferences((prev) => ({ ...prev, [key]: !value }));
+            enqueueSnackbar("Failed to save preferences.", {
+                variant: "error",
+            });
+        }
     };
 
     if (loading) return <LoadingScreen />;

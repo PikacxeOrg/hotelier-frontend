@@ -9,8 +9,8 @@ export interface SearchRequest {
     minPrice?: number;
     maxPrice?: number;
     amenities?: string[];
-    page?: number;
-    pageSize?: number;
+    page: number;
+    pageSize: number;
 }
 
 export interface SearchResponse {

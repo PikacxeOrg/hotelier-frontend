@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import SearchIcon from "@mui/icons-material/Search";
@@ -13,16 +13,22 @@ import {
     Rating,
     TextField,
     Typography,
+    Pagination,
 } from "@mui/material";
+
+import { useSnackbar } from "notistack";
 
 import { searchApi } from "@/api";
 import type { SearchRequest, SearchResponse } from "@/types";
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const { enqueueSnackbar } = useSnackbar();
+
     const [results, setResults] = useState<SearchResponse[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(false);
+
     const [filters, setFilters] = useState<SearchRequest>({
         location: "",
         numberOfGuests: 1,
@@ -32,18 +38,34 @@ export default function HomePage() {
         pageSize: 12,
     });
 
+    const pageCount = Math.ceil(totalCount / filters.pageSize);
+
     const handleSearch = async () => {
         setLoading(true);
+
         try {
             const { data } = await searchApi.search(filters);
             setResults(data.items);
             setTotalCount(data.totalCount);
         } catch {
-            /* TODO: error snackbar */
+            enqueueSnackbar("Failed to load accommodations.", {
+                variant: "error",
+            });
         } finally {
             setLoading(false);
         }
     };
+
+    const handlePageChange = (_: React.ChangeEvent<unknown>, page: number) => {
+        setFilters((prev) => ({
+            ...prev,
+            page,
+        }));
+    };
+
+    useEffect(() => {
+        handleSearch();
+    }, [filters.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <Box>
@@ -52,6 +74,7 @@ export default function HomePage() {
                 <Typography variant="h5" gutterBottom>
                     Find your perfect stay
                 </Typography>
+
                 <Box
                     sx={{
                         display: "flex",
@@ -64,10 +87,15 @@ export default function HomePage() {
                         label="Location"
                         value={filters.location}
                         onChange={(e) =>
-                            setFilters({ ...filters, location: e.target.value })
+                            setFilters({
+                                ...filters,
+                                location: e.target.value,
+                                page: 1,
+                            })
                         }
                         sx={{ flex: 1, minWidth: 200 }}
                     />
+
                     <TextField
                         label="Guests"
                         type="number"
@@ -76,29 +104,41 @@ export default function HomePage() {
                             setFilters({
                                 ...filters,
                                 numberOfGuests: +e.target.value,
+                                page: 1,
                             })
                         }
                         sx={{ width: 100 }}
                         slotProps={{ htmlInput: { min: 1 } }}
                     />
+
                     <TextField
                         label="Check-in"
                         type="date"
                         value={filters.checkIn}
                         onChange={(e) =>
-                            setFilters({ ...filters, checkIn: e.target.value })
+                            setFilters({
+                                ...filters,
+                                checkIn: e.target.value,
+                                page: 1,
+                            })
                         }
                         slotProps={{ inputLabel: { shrink: true } }}
                     />
+
                     <TextField
                         label="Check-out"
                         type="date"
                         value={filters.checkOut}
                         onChange={(e) =>
-                            setFilters({ ...filters, checkOut: e.target.value })
+                            setFilters({
+                                ...filters,
+                                checkOut: e.target.value,
+                                page: 1,
+                            })
                         }
                         slotProps={{ inputLabel: { shrink: true } }}
                     />
+
                     <Button
                         variant="contained"
                         startIcon={<SearchIcon />}
@@ -144,14 +184,16 @@ export default function HomePage() {
                             <CardMedia
                                 component="img"
                                 height="180"
-                                image={item.pictures[0] ?? "/placeholder.svg"}
+                                image={item.pictures[0] ?? "/placeholder.jpg"}
                                 alt={item.name}
                                 sx={{ objectFit: "cover" }}
                             />
+
                             <CardContent sx={{ flex: 1 }}>
                                 <Typography variant="h6" noWrap>
                                     {item.name}
                                 </Typography>
+
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -205,6 +247,7 @@ export default function HomePage() {
                                         €{item.totalPrice.toFixed(2)} total
                                     </Typography>
                                 )}
+
                                 {item.unitPrice != null && (
                                     <Typography
                                         variant="caption"
@@ -218,6 +261,25 @@ export default function HomePage() {
                     </Grid>
                 ))}
             </Grid>
+
+            {/* -- Pagination --------------------------- */}
+            {pageCount > 1 && (
+                <Box
+                    sx={{
+                        display: "flex",
+                        justifyContent: "center",
+                        mt: 4,
+                    }}
+                >
+                    <Pagination
+                        count={pageCount}
+                        page={filters.page}
+                        onChange={handlePageChange}
+                        color="primary"
+                        disabled={loading}
+                    />
+                </Box>
+            )}
         </Box>
     );
 }

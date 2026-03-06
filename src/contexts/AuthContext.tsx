@@ -52,9 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const token = localStorage.getItem("accessToken");
         if (token) {
-            refreshProfile().finally(() => setIsLoading(false));
+            Promise.resolve().then(() =>
+                refreshProfile().finally(() => setIsLoading(false)),
+            );
         } else {
-            setIsLoading(false);
+            Promise.resolve().then(() => setIsLoading(false));
         }
     }, [refreshProfile]);
 
@@ -94,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthState {
     const ctx = useContext(AuthContext);
     if (!ctx) throw new Error("useAuth must be used within AuthProvider");
