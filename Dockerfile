@@ -10,8 +10,11 @@ RUN VITE_APP_VERSION=$VERSION npm run build
 # == Stage 2: Serve ==
 FROM nginx:alpine
 
+ARG NGINX_CONF=nginx.conf.prod
+ENV NGINX_CONF=${NGINX_CONF}
+
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf.template /etc/nginx/conf.d/default.conf
+COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
 COPY cors.conf /etc/nginx/cors.conf
 
 EXPOSE 80

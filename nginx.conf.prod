@@ -1,0 +1,42 @@
+server {
+    listen       80;
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    set $cors_origin $http_origin;
+
+    # --------------------------
+    # Serve static assets directly
+    # --------------------------
+    location ^~ /assets/ {
+        include /etc/nginx/cors.conf;
+        alias /usr/share/nginx/html/assets/;
+        try_files $uri $uri/ =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # --------------------------
+    # SPA catch-all
+    # --------------------------
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # --------------------------
+    # Static asset caching (exclude /assets/)
+    # --------------------------
+    location ~* ^/(?!assets/).*\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # --------------------------
+    # Gzip
+    # --------------------------
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+    gzip_min_length 256;
+}
